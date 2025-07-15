@@ -1,0 +1,19 @@
+# Core dependencies for the assistive glasses system
+openai>=1.0.0
+requests>=2.25.0
+Pillow>=9.0.0
+pyttsx3>=2.90
+pygame>=2.0.0
+
+# Raspberry Pi specific dependencies
+# Note: These should be installed separately on Raspberry Pi
+# picamera2>=0.3.0
+# RPi.GPIO>=0.7.0
+
+# Optional dependencies for enhanced functionality
+numpy>=1.21.0
+opencv-python>=4.5.0
+
+# Development and testing
+pytest>=7.0.0
+pytest-cov>=4.0.0 
