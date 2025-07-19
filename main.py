@@ -58,9 +58,10 @@ class AssistiveGlasses:
         # Initialize voice command manager with config settings
         voice_config = self.config.get('voice_commands', {})
         self.voice_command_manager = VoiceCommandManager(
-            language=voice_config.get('language', 'en-US'),
-            timeout=voice_config.get('timeout', 1.0),
-            phrase_timeout=voice_config.get('phrase_timeout', 0.3)
+            model_size=voice_config.get('model_size', 'base'),
+            language=voice_config.get('language', 'en'),
+            chunk_duration=voice_config.get('chunk_duration', 2.0),
+            silence_threshold=voice_config.get('silence_threshold', 0.01)
         )
         
         # Set up button callbacks

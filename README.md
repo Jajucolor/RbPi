@@ -50,10 +50,10 @@ A Raspberry Pi-based assistive device that uses computer vision and AI to help v
 - Supports simulation mode
 
 ### Voice Command Manager (`modules/voice_command_manager.py`)
-- Listens for voice commands using speech recognition
+- Listens for voice commands using OpenAI Whisper
 - Supports multiple trigger words for capture and shutdown
-- Uses Google Speech Recognition API
-- Provides hands-free operation
+- Works offline (no internet required for voice commands)
+- High accuracy and privacy-friendly speech recognition
 
 ## Quick Start
 
@@ -138,7 +138,8 @@ Core dependencies include:
 - `picamera2` - Raspberry Pi camera interface
 - `gTTS` - Google Text-to-Speech engine
 - `pygame` - Audio playback
-- `SpeechRecognition` - Voice command recognition
+- `openai-whisper` - Offline voice command recognition
+- `torch` - PyTorch for Whisper neural network
 - `PyAudio` - Microphone input
 - `RPi.GPIO` - GPIO control
 - `Pillow` - Image processing

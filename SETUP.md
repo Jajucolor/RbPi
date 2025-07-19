@@ -44,6 +44,7 @@ This guide will help you set up the assistive glasses system on your Raspberry P
    sudo apt install -y python3-pygame alsa-utils
    sudo apt install -y mpg321 mpg123
    sudo apt install -y portaudio19-dev python3-pyaudio
+   sudo apt install -y ffmpeg
    ```
 
 ### Step 2: Install Camera and GPIO Libraries
@@ -173,9 +174,10 @@ This guide will help you set up the assistive glasses system on your Raspberry P
    python3 modules/button_manager.py
    ```
 
-4. **Test voice commands**
+4. **Test voice commands (Whisper)**
    ```bash
    python3 test_voice_commands.py
+   # Note: First run downloads Whisper model (~140MB)
    ```
 
 5. **Test complete system**

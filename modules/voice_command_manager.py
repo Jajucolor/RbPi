@@ -1,19 +1,25 @@
 """
 Voice Command Manager Module
-Handles speech recognition for voice-activated commands in the assistive glasses system
+Handles speech recognition using OpenAI Whisper for voice-activated commands in the assistive glasses system
 """
 
 import logging
 import threading
 import time
+import os
+import tempfile
+import wave
 from typing import Callable, Optional, List
+from pathlib import Path
+import numpy as np
 
 try:
-    import speech_recognition as sr
-    SPEECH_RECOGNITION_AVAILABLE = True
+    import whisper
+    import torch
+    WHISPER_AVAILABLE = True
 except ImportError:
-    SPEECH_RECOGNITION_AVAILABLE = False
-    logging.warning("speech_recognition not available - using simulation mode")
+    WHISPER_AVAILABLE = False
+    logging.warning("whisper not available - using simulation mode")
 
 try:
     import pyaudio
@@ -23,13 +29,23 @@ except ImportError:
     logging.warning("pyaudio not available - microphone may not work")
 
 class VoiceCommandManager:
-    """Manages voice command recognition for the assistive glasses"""
+    """Manages voice command recognition using Whisper for the assistive glasses"""
     
-    def __init__(self, language: str = "en-US", timeout: float = 1.0, phrase_timeout: float = 0.3):
+    def __init__(self, model_size: str = "base", language: str = "en", 
+                 chunk_duration: float = 2.0, silence_threshold: float = 0.01, 
+                 silence_duration: float = 1.0):
         self.logger = logging.getLogger(__name__)
+        self.model_size = model_size
         self.language = language
-        self.timeout = timeout
-        self.phrase_timeout = phrase_timeout
+        self.chunk_duration = chunk_duration
+        self.silence_threshold = silence_threshold
+        self.silence_duration = silence_duration
+        
+        # Audio recording settings
+        self.sample_rate = 16000  # Whisper works best with 16kHz
+        self.chunk_size = 1024
+        self.channels = 1
+        self.format = pyaudio.paInt16
         
         # Voice commands that trigger capture
         self.capture_commands = [
@@ -49,44 +65,63 @@ class VoiceCommandManager:
         # Recognition state
         self.listening = False
         self.recognition_thread = None
-        self.recognizer = None
-        self.microphone = None
+        self.whisper_model = None
+        self.audio_interface = None
         
-        # Initialize speech recognition
-        self.initialize_speech_recognition()
+        # Temporary files
+        self.temp_dir = Path(tempfile.gettempdir()) / "glasses_whisper"
+        self.temp_dir.mkdir(exist_ok=True)
+        
+        # Initialize Whisper and audio
+        self.initialize_whisper()
+        self.initialize_audio()
         
         # For simulation mode
-        self.simulation_mode = not (SPEECH_RECOGNITION_AVAILABLE and PYAUDIO_AVAILABLE)
+        self.simulation_mode = not (WHISPER_AVAILABLE and PYAUDIO_AVAILABLE and self.whisper_model is not None)
     
-    def initialize_speech_recognition(self):
-        """Initialize speech recognition components"""
-        if not SPEECH_RECOGNITION_AVAILABLE:
-            self.logger.warning("Speech recognition not available - running in simulation mode")
-            return
-        
-        if not PYAUDIO_AVAILABLE:
-            self.logger.warning("PyAudio not available - microphone may not work")
+    def initialize_whisper(self):
+        """Initialize Whisper model"""
+        if not WHISPER_AVAILABLE:
+            self.logger.warning("Whisper not available - running in simulation mode")
             return
         
         try:
-            self.recognizer = sr.Recognizer()
-            self.microphone = sr.Microphone()
+            self.logger.info(f"Loading Whisper model '{self.model_size}'... This may take a moment.")
+            self.whisper_model = whisper.load_model(self.model_size)
             
-            # Adjust for ambient noise
-            with self.microphone as source:
-                self.logger.info("Adjusting for ambient noise...")
-                self.recognizer.adjust_for_ambient_noise(source, duration=2)
+            # Check if CUDA is available for faster processing
+            if torch.cuda.is_available():
+                self.logger.info("CUDA available - using GPU acceleration")
+            else:
+                self.logger.info("Using CPU for Whisper processing")
             
-            # Set recognition parameters
-            self.recognizer.energy_threshold = 300
-            self.recognizer.dynamic_energy_threshold = True
-            self.recognizer.pause_threshold = 0.8
-            
-            self.logger.info("Speech recognition initialized successfully")
+            self.logger.info("Whisper model loaded successfully")
             
         except Exception as e:
-            self.logger.error(f"Failed to initialize speech recognition: {str(e)}")
-            self.simulation_mode = True
+            self.logger.error(f"Failed to load Whisper model: {str(e)}")
+            self.whisper_model = None
+    
+    def initialize_audio(self):
+        """Initialize audio recording interface"""
+        if not PYAUDIO_AVAILABLE:
+            self.logger.warning("PyAudio not available - running in simulation mode")
+            return
+        
+        try:
+            self.audio_interface = pyaudio.PyAudio()
+            
+            # List available microphones
+            self.logger.info("Available audio devices:")
+            for i in range(self.audio_interface.get_device_count()):
+                info = self.audio_interface.get_device_info_by_index(i)
+                if info['maxInputChannels'] > 0:
+                    self.logger.info(f"  {i}: {info['name']} (inputs: {info['maxInputChannels']})")
+            
+            self.logger.info("Audio interface initialized successfully")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to initialize audio interface: {str(e)}")
+            self.audio_interface = None
     
     def set_capture_callback(self, callback: Callable):
         """Set the callback function for capture commands"""
@@ -120,11 +155,12 @@ class VoiceCommandManager:
         
         self.listening = True
         
-        if SPEECH_RECOGNITION_AVAILABLE and PYAUDIO_AVAILABLE and not self.simulation_mode:
-            # Real speech recognition
+        if (WHISPER_AVAILABLE and PYAUDIO_AVAILABLE and 
+            self.whisper_model is not None and self.audio_interface is not None):
+            # Real speech recognition with Whisper
             self.recognition_thread = threading.Thread(target=self._listen_for_commands, daemon=True)
             self.recognition_thread.start()
-            self.logger.info("Started voice command recognition")
+            self.logger.info("Started Whisper voice command recognition")
         else:
             # Simulation mode
             self.logger.info("Running in simulation mode - voice commands disabled")
@@ -134,46 +170,130 @@ class VoiceCommandManager:
         self.listening = False
         
         if self.recognition_thread and self.recognition_thread.is_alive():
-            self.recognition_thread.join(timeout=2)
+            self.recognition_thread.join(timeout=3)
         
         self.logger.info("Voice command listening stopped")
     
     def _listen_for_commands(self):
-        """Listen for voice commands (runs in separate thread)"""
-        self.logger.info("Voice command listener started. Say 'capture' or 'analyze' to take a picture.")
+        """Listen for voice commands using Whisper (runs in separate thread)"""
+        self.logger.info("Whisper voice command listener started. Say 'capture' or 'analyze' to take a picture.")
         
         while self.listening:
             try:
-                # Listen for audio
-                with self.microphone as source:
-                    # Listen for audio with timeout
-                    audio = self.recognizer.listen(source, timeout=self.timeout, phrase_time_limit=5)
+                # Record audio chunk
+                audio_data = self._record_audio_chunk()
                 
-                # Recognize speech
-                try:
-                    # Use Google Speech Recognition (requires internet)
-                    text = self.recognizer.recognize_google(audio, language=self.language).lower()
-                    self.logger.info(f"Heard: '{text}'")
+                if audio_data is not None and self._has_speech(audio_data):
+                    # Save to temporary file
+                    temp_file = self._save_audio_to_file(audio_data)
                     
-                    # Check for commands
-                    self._process_command(text)
-                    
-                except sr.UnknownValueError:
-                    # Speech was unintelligible
-                    pass
-                except sr.RequestError as e:
-                    self.logger.error(f"Speech recognition error: {e}")
-                    time.sleep(1)  # Brief pause before retrying
-                    
-            except sr.WaitTimeoutError:
-                # No speech detected within timeout - this is normal
-                pass
+                    if temp_file:
+                        # Transcribe with Whisper
+                        text = self._transcribe_audio(temp_file)
+                        
+                        if text:
+                            self.logger.info(f"Whisper heard: '{text}'")
+                            self._process_command(text)
+                        
+                        # Clean up temporary file
+                        try:
+                            temp_file.unlink()
+                        except Exception as e:
+                            self.logger.warning(f"Failed to delete temp audio file: {e}")
+                
+                # Brief pause before next recording
+                time.sleep(0.1)
+                
             except Exception as e:
-                self.logger.error(f"Error in voice command listener: {str(e)}")
+                self.logger.error(f"Error in Whisper voice command listener: {str(e)}")
                 time.sleep(1)
     
+    def _record_audio_chunk(self) -> Optional[np.ndarray]:
+        """Record a chunk of audio from microphone"""
+        try:
+            # Open audio stream
+            stream = self.audio_interface.open(
+                format=self.format,
+                channels=self.channels,
+                rate=self.sample_rate,
+                input=True,
+                frames_per_buffer=self.chunk_size
+            )
+            
+            frames = []
+            frames_to_record = int(self.sample_rate * self.chunk_duration / self.chunk_size)
+            
+            for _ in range(frames_to_record):
+                if not self.listening:
+                    break
+                data = stream.read(self.chunk_size, exception_on_overflow=False)
+                frames.append(data)
+            
+            stream.stop_stream()
+            stream.close()
+            
+            # Convert to numpy array
+            audio_data = b''.join(frames)
+            audio_array = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
+            
+            return audio_array
+            
+        except Exception as e:
+            self.logger.error(f"Error recording audio: {str(e)}")
+            return None
+    
+    def _has_speech(self, audio_data: np.ndarray) -> bool:
+        """Check if audio data contains speech (simple energy-based detection)"""
+        if audio_data is None or len(audio_data) == 0:
+            return False
+        
+        # Calculate RMS (Root Mean Square) energy
+        rms_energy = np.sqrt(np.mean(audio_data ** 2))
+        
+        # Check if energy is above threshold
+        return rms_energy > self.silence_threshold
+    
+    def _save_audio_to_file(self, audio_data: np.ndarray) -> Optional[Path]:
+        """Save audio data to a temporary WAV file"""
+        try:
+            # Create temporary file
+            temp_file = self.temp_dir / f"voice_command_{int(time.time() * 1000)}.wav"
+            
+            # Convert float32 to int16
+            audio_int16 = (audio_data * 32767).astype(np.int16)
+            
+            # Save as WAV file
+            with wave.open(str(temp_file), 'wb') as wav_file:
+                wav_file.setnchannels(self.channels)
+                wav_file.setsampwidth(2)  # 2 bytes for int16
+                wav_file.setframerate(self.sample_rate)
+                wav_file.writeframes(audio_int16.tobytes())
+            
+            return temp_file
+            
+        except Exception as e:
+            self.logger.error(f"Error saving audio to file: {str(e)}")
+            return None
+    
+    def _transcribe_audio(self, audio_file: Path) -> Optional[str]:
+        """Transcribe audio file using Whisper"""
+        try:
+            # Transcribe with Whisper
+            result = self.whisper_model.transcribe(
+                str(audio_file),
+                language=self.language if self.language != "auto" else None,
+                fp16=False  # Use fp32 for better Raspberry Pi compatibility
+            )
+            
+            text = result["text"].strip()
+            return text if text else None
+            
+        except Exception as e:
+            self.logger.error(f"Error transcribing audio with Whisper: {str(e)}")
+            return None
+    
     def _process_command(self, text: str):
-        """Process recognized speech text for commands"""
+        """Process transcribed text for commands"""
         text_lower = text.lower().strip()
         
         # Check for capture commands
@@ -212,22 +332,44 @@ class VoiceCommandManager:
     
     def test_microphone(self) -> bool:
         """Test if microphone is working"""
-        if not SPEECH_RECOGNITION_AVAILABLE or not PYAUDIO_AVAILABLE:
-            self.logger.warning("Cannot test microphone - libraries not available")
+        if not WHISPER_AVAILABLE or not PYAUDIO_AVAILABLE or not self.whisper_model:
+            self.logger.warning("Cannot test microphone - required libraries not available")
             return False
         
         try:
-            with self.microphone as source:
-                self.logger.info("Testing microphone... Say something!")
-                audio = self.recognizer.listen(source, timeout=5, phrase_time_limit=5)
-                
-            text = self.recognizer.recognize_google(audio)
-            self.logger.info(f"Microphone test successful! Heard: '{text}'")
-            return True
+            self.logger.info("Testing microphone with Whisper... Say something!")
             
-        except sr.WaitTimeoutError:
-            self.logger.warning("Microphone test timeout - no speech detected")
+            # Record a test chunk
+            audio_data = self._record_audio_chunk()
+            
+            if audio_data is None:
+                self.logger.error("Failed to record audio")
+                return False
+            
+            if not self._has_speech(audio_data):
+                self.logger.warning("No speech detected in audio")
+                return False
+            
+            # Save and transcribe
+            temp_file = self._save_audio_to_file(audio_data)
+            if temp_file:
+                text = self._transcribe_audio(temp_file)
+                
+                # Clean up
+                try:
+                    temp_file.unlink()
+                except:
+                    pass
+                
+                if text:
+                    self.logger.info(f"Microphone test successful! Whisper heard: '{text}'")
+                    return True
+                else:
+                    self.logger.warning("Whisper could not transcribe audio")
+                    return False
+            
             return False
+            
         except Exception as e:
             self.logger.error(f"Microphone test failed: {str(e)}")
             return False
@@ -236,13 +378,16 @@ class VoiceCommandManager:
         """Get current voice command status"""
         return {
             "listening": self.listening,
-            "speech_recognition_available": SPEECH_RECOGNITION_AVAILABLE,
+            "whisper_available": WHISPER_AVAILABLE,
             "pyaudio_available": PYAUDIO_AVAILABLE,
             "simulation_mode": self.simulation_mode,
+            "model_size": self.model_size,
             "language": self.language,
+            "sample_rate": self.sample_rate,
             "capture_commands": self.capture_commands,
             "shutdown_commands": self.shutdown_commands,
-            "microphone_available": self.microphone is not None
+            "model_loaded": self.whisper_model is not None,
+            "audio_initialized": self.audio_interface is not None
         }
     
     def simulate_capture_command(self):
@@ -255,12 +400,35 @@ class VoiceCommandManager:
         self.logger.info("Simulating shutdown voice command")
         self._handle_shutdown_command()
     
+    def cleanup_temp_files(self):
+        """Clean up temporary audio files"""
+        try:
+            if self.temp_dir.exists():
+                for file in self.temp_dir.glob("*.wav"):
+                    try:
+                        file.unlink()
+                    except Exception as e:
+                        self.logger.warning(f"Failed to delete temp file {file}: {e}")
+                self.logger.info("Temporary audio files cleaned up")
+        except Exception as e:
+            self.logger.error(f"Error cleaning up temp files: {str(e)}")
+    
     def cleanup(self):
         """Clean up voice command resources"""
         self.logger.info("Cleaning up voice command manager...")
         
         # Stop listening
         self.stop_listening()
+        
+        # Clean up audio interface
+        if self.audio_interface:
+            try:
+                self.audio_interface.terminate()
+            except Exception as e:
+                self.logger.error(f"Error terminating audio interface: {str(e)}")
+        
+        # Clean up temporary files
+        self.cleanup_temp_files()
         
         self.logger.info("Voice command manager cleanup complete")
     
@@ -270,7 +438,7 @@ class VoiceCommandManager:
 
 # Test function for voice commands
 def test_voice_commands():
-    """Test function for voice command manager"""
+    """Test function for Whisper voice command manager"""
     logging.basicConfig(level=logging.INFO)
     
     def on_capture():
@@ -279,17 +447,21 @@ def test_voice_commands():
     def on_shutdown():
         print("🛑 Shutdown command received!")
     
-    voice_manager = VoiceCommandManager()
+    voice_manager = VoiceCommandManager(model_size="base")
     voice_manager.set_capture_callback(on_capture)
     voice_manager.set_shutdown_callback(on_shutdown)
     
-    print("Voice Command Test")
-    print("Status:", voice_manager.get_voice_status())
+    print("Whisper Voice Command Test")
+    status = voice_manager.get_voice_status()
+    print("Status:", status)
     
     # Test microphone
     if not voice_manager.simulation_mode:
         print("\n--- Microphone Test ---")
-        voice_manager.test_microphone()
+        if voice_manager.test_microphone():
+            print("✓ Microphone test passed")
+        else:
+            print("✗ Microphone test failed")
     
     voice_manager.start_listening()
     
@@ -301,9 +473,10 @@ def test_voice_commands():
             time.sleep(1)
             voice_manager.simulate_shutdown_command()
         else:
-            print("Listening for voice commands. Say 'capture' or 'shutdown'...")
+            print("Listening for voice commands with Whisper...")
             print("Available capture commands:", voice_manager.capture_commands)
             print("Available shutdown commands:", voice_manager.shutdown_commands)
+            print("Speak now! (30 seconds)")
             time.sleep(30)  # Listen for 30 seconds
             
     except KeyboardInterrupt:
