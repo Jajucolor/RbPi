@@ -4,6 +4,8 @@ requests>=2.25.0
 Pillow>=9.0.0
 gTTS>=2.3.0
 pygame>=2.0.0
+SpeechRecognition>=3.10.0
+PyAudio>=0.2.11
 
 # Raspberry Pi specific dependencies
 # Note: These should be installed separately on Raspberry Pi

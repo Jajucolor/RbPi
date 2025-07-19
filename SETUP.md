@@ -10,9 +10,10 @@ This guide will help you set up the assistive glasses system on your Raspberry P
 - MicroSD card (32GB or larger, Class 10)
 - Power supply (5V, 3A)
 - Speakers or headphones with 3.5mm jack
-- Push buttons (2x momentary push buttons)
-- Breadboard and jumper wires
-- Resistors (2x 10kΩ pull-up resistors)
+- USB microphone or USB headset with microphone
+- Push buttons (2x momentary push buttons) - Optional backup
+- Breadboard and jumper wires - Optional for buttons
+- Resistors (2x 10kΩ pull-up resistors) - Optional for buttons
 
 ### Optional Components
 - Portable battery pack for mobile use
@@ -42,6 +43,7 @@ This guide will help you set up the assistive glasses system on your Raspberry P
    sudo apt install -y python3-pip python3-venv git
    sudo apt install -y python3-pygame alsa-utils
    sudo apt install -y mpg321 mpg123
+   sudo apt install -y portaudio19-dev python3-pyaudio
    ```
 
 ### Step 2: Install Camera and GPIO Libraries
@@ -69,6 +71,22 @@ This guide will help you set up the assistive glasses system on your Raspberry P
    python3 -m venv glasses_env
    source glasses_env/bin/activate
    ```
+   ```bash
+   # 1. Deactivate and delete old venv
+   deactivate
+   rm -r ~/RbPi/glasses_env
+   
+   # 2. Recreate with --system-site-packages
+   cd ~/RbPi
+   python3 -m venv glasses_env --system-site-packages
+   
+   # 3. Activate
+   source glasses_env/bin/activate
+   ```
+   ```bash
+   pip install openai
+   pip install gTTS
+   ```
 
 3. **Install Python dependencies**
    ```bash
@@ -95,6 +113,11 @@ This guide will help you set up the assistive glasses system on your Raspberry P
 #### Audio Connection
 - Connect speakers or headphones to the 3.5mm audio jack
 - Or use USB audio device if preferred
+
+#### Microphone Connection
+- Connect USB microphone to any USB port
+- Or use USB headset with built-in microphone
+- Test microphone: `arecord -l` (should list your microphone)
 
 ### Step 5: Configuration
 
@@ -150,7 +173,12 @@ This guide will help you set up the assistive glasses system on your Raspberry P
    python3 modules/button_manager.py
    ```
 
-4. **Test complete system**
+4. **Test voice commands**
+   ```bash
+   python3 test_voice_commands.py
+   ```
+
+5. **Test complete system**
    ```bash
    python3 main.py
    ```
@@ -164,9 +192,13 @@ This guide will help you set up the assistive glasses system on your Raspberry P
    python3 main.py
    ```
 
-2. **Use the buttons**
-   - **Capture Button**: Press to capture and analyze surroundings
-   - **Shutdown Button**: Press to safely shutdown the system
+2. **Use voice commands or buttons**
+   - **Voice Commands**: 
+     - Say "capture", "analyze", "take picture", or "describe" to analyze surroundings
+     - Say "shutdown", "quit", or "exit" to safely shutdown the system
+   - **Backup Buttons** (if connected):
+     - **Capture Button**: Press to capture and analyze surroundings  
+     - **Shutdown Button**: Press to safely shutdown the system
 
 ### Auto-start on Boot
 

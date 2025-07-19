@@ -6,7 +6,7 @@ A Raspberry Pi-based assistive device that uses computer vision and AI to help v
 
 - **Real-time Environment Analysis**: Captures and analyzes surroundings using OpenAI's GPT-4 Vision API
 - **Audio Feedback**: Converts visual information to speech using text-to-speech technology
-- **Simple Controls**: Easy-to-use button interface for capturing and analyzing environments
+- **Voice Activation**: Hands-free voice commands to capture and analyze environments
 - **Modular Design**: Well-organized codebase with separate modules for different functionalities
 - **Configurable**: Customizable settings for camera, speech, and system behavior
 - **Raspberry Pi Optimized**: Designed specifically for Raspberry Pi hardware
@@ -49,6 +49,12 @@ A Raspberry Pi-based assistive device that uses computer vision and AI to help v
 - Provides debouncing functionality
 - Supports simulation mode
 
+### Voice Command Manager (`modules/voice_command_manager.py`)
+- Listens for voice commands using speech recognition
+- Supports multiple trigger words for capture and shutdown
+- Uses Google Speech Recognition API
+- Provides hands-free operation
+
 ## Quick Start
 
 1. **Hardware Setup**
@@ -75,9 +81,10 @@ A Raspberry Pi-based assistive device that uses computer vision and AI to help v
    ```
 
 3. **Usage**
-   - Press capture button to analyze surroundings
+   - Say "capture", "analyze", or "take picture" to analyze surroundings
    - Listen to audio description
-   - Press shutdown button to safely exit
+   - Say "shutdown" or "quit" to safely exit
+   - Buttons also work as backup (capture: GPIO 18, shutdown: GPIO 3)
 
 ## Detailed Setup
 
@@ -131,6 +138,8 @@ Core dependencies include:
 - `picamera2` - Raspberry Pi camera interface
 - `gTTS` - Google Text-to-Speech engine
 - `pygame` - Audio playback
+- `SpeechRecognition` - Voice command recognition
+- `PyAudio` - Microphone input
 - `RPi.GPIO` - GPIO control
 - `Pillow` - Image processing
 

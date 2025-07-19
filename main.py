@@ -18,6 +18,7 @@ from modules.vision_analyzer import VisionAnalyzer
 from modules.speech_manager import SpeechManager
 from modules.config_manager import ConfigManager
 from modules.button_manager import ButtonManager
+from modules.voice_command_manager import VoiceCommandManager
 
 # Configure logging
 logging.basicConfig(
@@ -54,9 +55,21 @@ class AssistiveGlasses:
         
         self.button_manager = ButtonManager()
         
+        # Initialize voice command manager with config settings
+        voice_config = self.config.get('voice_commands', {})
+        self.voice_command_manager = VoiceCommandManager(
+            language=voice_config.get('language', 'en-US'),
+            timeout=voice_config.get('timeout', 1.0),
+            phrase_timeout=voice_config.get('phrase_timeout', 0.3)
+        )
+        
         # Set up button callbacks
         self.button_manager.set_capture_callback(self.manual_capture)
         self.button_manager.set_shutdown_callback(self.shutdown)
+        
+        # Set up voice command callbacks
+        self.voice_command_manager.set_capture_callback(self.voice_capture)
+        self.voice_command_manager.set_shutdown_callback(self.shutdown)
         
         self.logger.info("Assistive glasses system initialized")
     
@@ -66,10 +79,13 @@ class AssistiveGlasses:
         self.running = True
         
         # Welcome message
-        self.speech.speak("Assistive glasses system starting. Press the button to capture and analyze your surroundings.")
+        self.speech.speak("Assistive glasses system starting. Say 'capture' or 'analyze' to take a picture and analyze your surroundings.")
         
-        # Start button monitoring
+        # Start button monitoring (as backup)
         self.button_manager.start_monitoring()
+        
+        # Start voice command listening
+        self.voice_command_manager.start_listening()
         
         # Start main loop
         self.main_loop()
@@ -105,6 +121,14 @@ class AssistiveGlasses:
             self.capture_thread.start()
         else:
             self.speech.speak("Analysis in progress, please wait")
+    
+    def voice_capture(self):
+        """Handle voice-activated capture"""
+        self.logger.info("Voice capture command received")
+        # Provide audio feedback that the command was heard
+        self.speech.speak("Voice command received. Capturing image now.")
+        # Use the same capture logic as manual capture
+        self.manual_capture()
     
     def capture_and_analyze(self):
         """Capture image and analyze with OpenAI Vision"""
@@ -161,6 +185,9 @@ class AssistiveGlasses:
         
         if self.button_manager:
             self.button_manager.stop_monitoring()
+        
+        if self.voice_command_manager:
+            self.voice_command_manager.stop_listening()
         
         # Wait for any running threads to complete
         if self.capture_thread and self.capture_thread.is_alive():
