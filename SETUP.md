@@ -40,8 +40,8 @@ This guide will help you set up the assistive glasses system on your Raspberry P
 3. **Install system dependencies**
    ```bash
    sudo apt install -y python3-pip python3-venv git
-   sudo apt install -y libasound2-dev espeak espeak-data libespeak1
-   sudo apt install -y libportaudio2 portaudio19-dev
+   sudo apt install -y python3-pygame alsa-utils
+   sudo apt install -y mpg321 mpg123
    ```
 
 ### Step 2: Install Camera and GPIO Libraries
@@ -142,7 +142,7 @@ This guide will help you set up the assistive glasses system on your Raspberry P
 
 2. **Test speech**
    ```bash
-   python3 -c "from modules.speech_manager import SpeechManager; sm = SpeechManager(); sm.speak('Hello, testing speech')"
+   python3 test_gtts.py
    ```
 
 3. **Test buttons**
@@ -212,7 +212,7 @@ This guide will help you set up the assistive glasses system on your Raspberry P
 2. **Audio not working**
    - Check audio output: `aplay /usr/share/sounds/alsa/Front_Left.wav`
    - Set audio output: `sudo raspi-config` > Advanced Options > Audio
-   - Test speech: `espeak "Hello world"`
+   - Test speech: `python3 test_gtts.py`
 
 3. **Button not responding**
    - Check GPIO connections

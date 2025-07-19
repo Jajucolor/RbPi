@@ -129,7 +129,8 @@ The system uses a JSON configuration file with the following sections:
 Core dependencies include:
 - `openai` - OpenAI API client
 - `picamera2` - Raspberry Pi camera interface
-- `pyttsx3` - Text-to-speech engine
+- `gTTS` - Google Text-to-Speech engine
+- `pygame` - Audio playback
 - `RPi.GPIO` - GPIO control
 - `Pillow` - Image processing
 

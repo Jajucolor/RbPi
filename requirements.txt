@@ -2,7 +2,7 @@
 openai>=1.0.0
 requests>=2.25.0
 Pillow>=9.0.0
-pyttsx3>=2.90
+gTTS>=2.3.0
 pygame>=2.0.0
 
 # Raspberry Pi specific dependencies

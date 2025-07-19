@@ -1,0 +1,32 @@
+{
+  "openai": {
+    "api_key": "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",
+    "model": "gpt-4o-mini",
+    "max_tokens": 300,
+    "temperature": 0.3
+  },
+  "camera": {
+    "width": 1920,
+    "height": 1080,
+    "quality": 85,
+    "auto_focus": true
+  },
+  "speech": {
+    "rate": 150,
+    "volume": 0.9,
+    "voice_id": "21m00Tcm4TlvDq8ikWAM",
+    "interrupt_on_capture": false
+  },
+  "system": {
+    "capture_interval": 3,
+    "log_level": "INFO",
+    "save_images": true,
+    "save_analysis": true
+  },
+  "hardware": {
+    "button_pin": 18,
+    "led_pin": 24,
+    "shutdown_pin": 3,
+    "debounce_time": 0.2
+  }
+} 

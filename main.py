@@ -43,7 +43,15 @@ class AssistiveGlasses:
         self.config = ConfigManager()
         self.camera = CameraManager()
         self.vision_analyzer = VisionAnalyzer(self.config.get_openai_key())
-        self.speech = SpeechManager()
+        
+        # Initialize speech manager with config settings
+        speech_config = self.config.get_speech_config()
+        self.speech = SpeechManager(
+            volume=speech_config.get('volume', 0.9),
+            language='en',
+            slow=False
+        )
+        
         self.button_manager = ButtonManager()
         
         # Set up button callbacks
