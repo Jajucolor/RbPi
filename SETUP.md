@@ -69,6 +69,7 @@ This guide will help you set up the assistive glasses system on your Raspberry P
    python3 -m venv glasses_env
    source glasses_env/bin/activate
    ```
+   python3 -m venv glasses_env --system-site-packages
 
 3. **Install Python dependencies**
    ```bash
