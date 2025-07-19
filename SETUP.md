@@ -88,7 +88,7 @@ This guide will help you set up the assistive glasses system on your Raspberry P
    pip install gTTS
    ```
 
-3. **Install Python dependencies**
+4. **Install Python dependencies**
    ```bash
    pip install -r requirements.txt
    ```
