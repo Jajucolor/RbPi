@@ -35,5 +35,12 @@
     "chunk_duration": 2.0,
     "silence_threshold": 0.01,
     "silence_duration": 1.0
+  },
+  "companion": {
+    "model": "gpt-4o-mini",
+    "personality": "jarvis",
+    "voice_enabled": true,
+    "proactive_mode": true,
+    "idle_threshold": 300
   }
 } 

@@ -178,6 +178,13 @@ This guide will help you set up the voice-activated assistive glasses system on 
        "silence_threshold": 0.01,
        "silence_duration": 1.0
      },
+     "companion": {
+       "model": "gpt-4o-mini",
+       "personality": "jarvis",
+       "voice_enabled": true,
+       "proactive_mode": true,
+       "idle_threshold": 300
+     },
      "system": {
        "capture_interval": 3,
        "log_level": "INFO",
@@ -228,16 +235,28 @@ This guide will help you set up the voice-activated assistive glasses system on 
    # - Verify all voice command functionality
    ```
 
-5. **Test physical buttons (if connected)**
+5. **Test AI Companion (NEW)**
+   ```bash
+   python3 test_ai_companion.py
+   # This will test:
+   # - Different personality modes (J.A.R.V.I.S., Assistant, Iris)
+   # - Vision analysis enhancement
+   # - Conversation flow and context awareness
+   # - Speech integration
+   # - Interactive companion chat
+   ```
+
+6. **Test physical buttons (if connected)**
    ```bash
    python3 modules/button_manager.py
    ```
 
-6. **Test complete system**
+7. **Test complete system**
    ```bash
    python3 main.py
    # System will start with voice activation ready
    # Say "capture" or "analyze" to test image analysis
+   # Chat naturally with your AI companion
    # Say "shutdown" or use Ctrl+C to exit
    ```
 
@@ -253,22 +272,50 @@ This guide will help you set up the voice-activated assistive glasses system on 
    
    The system will announce: *"Assistive glasses system starting. Say 'capture' or 'analyze' to take a picture and analyze your surroundings."*
 
-2. **Primary Interface: Voice Commands**
+2. **Primary Interface: Voice Commands & Conversation**
+   
+   **Capture Commands:**
    - **"capture"** / **"analyze"** / **"take picture"** → Capture and analyze surroundings
-   - **"describe"** / **"look"** / **"see"** → Same as capture
-   - **"what do you see"** → Same as capture
-   - **"shutdown"** / **"quit"** / **"exit"** → Safely shutdown system
-   - **"stop"** / **"goodbye"** → Same as shutdown
+   - **"describe"** / **"look"** / **"see"** / **"show me"** → Same as capture
+   - **"what do you see"** / **"examine"** / **"scan"** → Same as capture
+   
+   **System Commands:**
+   - **"shutdown"** / **"quit"** / **"exit"** / **"goodbye"** → Safely shutdown system
+   - **"stop"** / **"sleep"** / **"standby"** / **"power off"** → Same as shutdown
+   
+   **Natural Conversation** (NEW AI Companion Feature):
+   - **"Hello"** / **"How are you?"** → Chat with your AI companion
+   - **"What can you help me with?"** → Get assistance information
+   - **"I'm feeling nervous about going out"** → Receive encouragement and support
+   - **"Tell me about my surroundings"** → Request proactive environment analysis
+   - **"What should I do if I get lost?"** → Get guidance and suggestions
+   - Any natural conversation is supported - your AI companion will respond contextually!
 
-3. **Backup Interface: Physical Buttons** (if connected)
+3. **AI Companion Personalities**
+   
+   **J.A.R.V.I.S. (Default)** - Sophisticated and proactive like Tony Stark's AI
+   - *"Good day, sir. J.A.R.V.I.S. at your service. All systems are operational and ready to assist."*
+   - Professional, intelligent, slightly formal but helpful
+   
+   **Helpful Assistant** - Polite and informative
+   - *"Good day! I'm your AI assistant, ready to help you navigate and understand your environment."*
+   - Clear, patient, and encouraging communication style
+   
+   **Iris (Friendly Companion)** - Warm and conversational
+   - *"Hey there! I'm Iris, your friendly AI companion. I'm excited to explore the world with you today!"*
+   - Enthusiastic, supportive, and naturally conversational
+
+4. **Backup Interface: Physical Buttons** (if connected)
    - **Capture Button** (GPIO 18): Press to capture and analyze surroundings  
    - **Shutdown Button** (GPIO 3): Press to safely shutdown the system
 
-4. **System Workflow**
-   - Voice activation is **always listening** in the background
-   - Say any capture command → System responds: *"Voice command received. Capturing image now."*
-   - Image analysis takes 5-15 seconds → System speaks detailed description
-   - Ready for next command immediately
+5. **Enhanced System Workflow**
+   - **Voice activation is always listening** for both commands and conversation
+   - **Capture Commands** → *"Voice command received. Capturing image now."* → Enhanced AI analysis with contextual intelligence
+   - **Conversation** → Natural responses from your AI companion based on personality
+   - **Proactive Assistance** → Your companion may check in periodically: *"How are you doing? Anything I can help with?"*
+   - **Context Awareness** → Your companion remembers recent conversations and environment analysis
+   - Ready for next interaction immediately (capture, conversation, or commands)
 
 ### Auto-start on Boot
 

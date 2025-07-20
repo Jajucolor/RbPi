@@ -19,6 +19,7 @@ from modules.speech_manager import SpeechManager
 from modules.config_manager import ConfigManager
 from modules.button_manager import ButtonManager
 from modules.voice_command_manager import VoiceCommandManager
+from modules.ai_companion import AICompanion
 
 # Configure logging
 logging.basicConfig(
@@ -64,6 +65,15 @@ class AssistiveGlasses:
             silence_threshold=voice_config.get('silence_threshold', 0.01)
         )
         
+        # Initialize AI companion
+        companion_config = self.config.get('companion', {})
+        self.ai_companion = AICompanion(
+            api_key=self.config.get_openai_key(),
+            model=companion_config.get('model', 'gpt-4o-mini'),
+            personality=companion_config.get('personality', 'jarvis'),
+            voice_enabled=companion_config.get('voice_enabled', True)
+        )
+        
         # Set up button callbacks
         self.button_manager.set_capture_callback(self.manual_capture)
         self.button_manager.set_shutdown_callback(self.shutdown)
@@ -72,6 +82,10 @@ class AssistiveGlasses:
         self.voice_command_manager.set_capture_callback(self.voice_capture)
         self.voice_command_manager.set_shutdown_callback(self.shutdown)
         
+        # Connect AI companion to voice command manager and speech system
+        self.ai_companion.set_speech_manager(self.speech)
+        self.voice_command_manager.set_companion(self.ai_companion)
+        
         self.logger.info("Assistive glasses system initialized")
     
     def start(self):
@@ -79,8 +93,8 @@ class AssistiveGlasses:
         self.logger.info("Starting assistive glasses system...")
         self.running = True
         
-        # Welcome message
-        self.speech.speak("Assistive glasses system starting. Say 'capture' or 'analyze' to take a picture and analyze your surroundings.")
+        # Start AI companion (includes welcome message)
+        self.ai_companion.start_companion()
         
         # Start button monitoring (as backup)
         self.button_manager.start_monitoring()
@@ -150,10 +164,13 @@ class AssistiveGlasses:
             
             if description:
                 self.logger.info(f"Analysis complete: {description}")
-                self.speech.speak(f"I can see: {description}")
+                
+                # Process with AI companion for enhanced response
+                enhanced_response = self.ai_companion.process_vision_analysis(description)
+                self.speech.speak(enhanced_response)
                 
                 # Save analysis to log file
-                self.save_analysis_log(description)
+                self.save_analysis_log(f"Raw: {description}\nEnhanced: {enhanced_response}")
             else:
                 self.speech.speak("Sorry, I couldn't analyze the image. Please try again.")
                 
@@ -178,7 +195,9 @@ class AssistiveGlasses:
         self.logger.info("Shutting down assistive glasses system...")
         self.running = False
         
-        self.speech.speak("Shutting down assistive glasses system. Goodbye!")
+        # Stop AI companion (includes farewell message)
+        if self.ai_companion:
+            self.ai_companion.stop_companion()
         
         # Clean up resources
         if self.camera:
@@ -189,6 +208,9 @@ class AssistiveGlasses:
         
         if self.voice_command_manager:
             self.voice_command_manager.stop_listening()
+        
+        if self.ai_companion:
+            self.ai_companion.cleanup()
         
         # Wait for any running threads to complete
         if self.capture_thread and self.capture_thread.is_alive():

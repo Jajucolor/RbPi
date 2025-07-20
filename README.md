@@ -4,11 +4,16 @@ A Raspberry Pi-based assistive device that uses computer vision and AI to help v
 
 ## Features
 
+- **AI Companion**: Intelligent conversational AI inspired by J.A.R.V.I.S. and Jaison - chat naturally, get proactive assistance
 - **Real-time Environment Analysis**: Captures and analyzes surroundings using OpenAI's GPT-4 Vision API
-- **Audio Feedback**: Converts visual information to speech using text-to-speech technology
-- **Voice Activation**: Hands-free voice commands to capture and analyze environments
+- **Enhanced Vision Descriptions**: AI companion processes and enhances image descriptions with contextual intelligence  
+- **Multiple Personalities**: Choose from helpful assistant, J.A.R.V.I.S., or friendly companion personalities
+- **Proactive Assistance**: AI companion checks in and offers help based on your activity patterns
+- **Voice Activation**: Hands-free voice commands and natural conversation using OpenAI Whisper
+- **Offline Voice Recognition**: Privacy-preserving speech recognition that works without internet
+- **High-Quality Audio**: Google Text-to-Speech (gTTS) for clear, natural speech output
 - **Modular Design**: Well-organized codebase with separate modules for different functionalities
-- **Configurable**: Customizable settings for camera, speech, and system behavior
+- **Configurable**: Customizable settings for camera, speech, companion personality, and system behavior
 - **Raspberry Pi Optimized**: Designed specifically for Raspberry Pi hardware
 
 ## System Components
@@ -54,6 +59,14 @@ A Raspberry Pi-based assistive device that uses computer vision and AI to help v
 - Supports multiple trigger words for capture and shutdown
 - Works offline (no internet required for voice commands)
 - High accuracy and privacy-friendly speech recognition
+- Handles natural conversation routing to AI companion
+
+### AI Companion (`modules/ai_companion.py`)
+- Intelligent conversational AI with multiple personalities (Assistant, J.A.R.V.I.S., Iris)
+- Enhances vision analysis with contextual intelligence and natural language
+- Provides proactive assistance and check-ins based on user activity
+- Maintains conversation history and user context for better responses
+- Supports both OpenAI API integration and offline fallback modes
 
 ## Quick Start
 

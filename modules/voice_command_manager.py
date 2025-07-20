@@ -50,17 +50,24 @@ class VoiceCommandManager:
         # Voice commands that trigger capture
         self.capture_commands = [
             "capture", "take picture", "analyze", "describe", "look", 
-            "see", "what do you see", "take photo", "picture", "camera"
+            "see", "what do you see", "take photo", "picture", "camera",
+            "show me", "scan", "examine"
         ]
         
         # Voice commands that trigger shutdown
         self.shutdown_commands = [
-            "shutdown", "quit", "exit", "stop", "goodbye", "turn off"
+            "shutdown", "quit", "exit", "stop", "goodbye", "turn off",
+            "sleep", "standby", "power off"
         ]
         
         # Callback functions
         self.capture_callback = None
         self.shutdown_callback = None
+        self.conversation_callback = None  # For general conversation
+        
+        # AI Companion integration
+        self.companion_mode = False
+        self.companion = None
         
         # Recognition state
         self.listening = False
@@ -132,6 +139,17 @@ class VoiceCommandManager:
         """Set the callback function for shutdown commands"""
         self.shutdown_callback = callback
         self.logger.info("Shutdown callback set")
+    
+    def set_conversation_callback(self, callback: Callable):
+        """Set the callback function for general conversation"""
+        self.conversation_callback = callback
+        self.logger.info("Conversation callback set")
+    
+    def set_companion(self, companion):
+        """Set the AI companion for conversational mode"""
+        self.companion = companion
+        self.companion_mode = True
+        self.logger.info("AI Companion integration enabled")
     
     def add_capture_command(self, command: str):
         """Add a new voice command that triggers capture"""
@@ -309,6 +327,16 @@ class VoiceCommandManager:
                 self.logger.info(f"Shutdown command detected: '{text}'")
                 self._handle_shutdown_command()
                 return
+        
+        # If in companion mode and no specific command detected, treat as conversation
+        if self.companion_mode and self.companion:
+            self.logger.info(f"Processing conversation: '{text}'")
+            self._handle_conversation(text)
+        elif self.conversation_callback:
+            self.logger.info(f"Processing general input: '{text}'")
+            self.conversation_callback(text)
+        else:
+            self.logger.info(f"Unrecognized input: '{text}' - no conversation handler available")
     
     def _handle_capture_command(self):
         """Handle capture voice command"""
@@ -329,6 +357,22 @@ class VoiceCommandManager:
                 self.logger.error(f"Error in shutdown callback: {str(e)}")
         else:
             self.logger.warning("No shutdown callback set")
+    
+    def _handle_conversation(self, text: str):
+        """Handle conversational input with AI companion"""
+        if self.companion:
+            try:
+                response = self.companion.handle_conversation(text)
+                self.companion.speak(response)
+            except Exception as e:
+                self.logger.error(f"Error in companion conversation: {str(e)}")
+        elif self.conversation_callback:
+            try:
+                self.conversation_callback(text)
+            except Exception as e:
+                self.logger.error(f"Error in conversation callback: {str(e)}")
+        else:
+            self.logger.warning("No conversation handler available")
     
     def test_microphone(self) -> bool:
         """Test if microphone is working"""
