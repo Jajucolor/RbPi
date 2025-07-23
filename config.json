@@ -5,6 +5,11 @@
     "max_tokens": 300,
     "temperature": 0.3
   },
+  "discord": {
+    "token": "MTM1MDczMDQ5NTY1ODU2MTU0Ng.GWpLP2._x4yl0cLpf-Hr91qfbbP2afYMv16SOKfEcYER4",
+    "command_prefix": "!",
+    "activity_name": "for voice commands | !join to start"
+  },
   "camera": {
     "width": 1920,
     "height": 1080,
@@ -44,5 +49,15 @@
     "idle_threshold": 180,
     "constant_listening": true,
     "conversation_priority": true
+  },
+  "ultrasonic_sensor": {
+    "trigger_pin": 23,
+    "echo_pin": 24,
+    "obstacle_threshold_cm": 100.0,
+    "close_threshold_cm": 30.0,
+    "medium_threshold_cm": 60.0,
+    "far_threshold_cm": 100.0,
+    "reading_interval": 0.5,
+    "csv_file": "distance_log.csv"
   }
 } 
