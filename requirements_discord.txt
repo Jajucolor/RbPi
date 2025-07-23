@@ -1,0 +1,33 @@
+# Discord Bot Requirements for INTA Assistive Glasses System
+# Core Discord dependencies
+discord.py>=2.3.0
+discord-ext-voice-recv>=0.5.0
+
+# Existing system requirements
+openai>=1.0.0
+openai-whisper>=20231117
+opencv-python>=4.8.0
+numpy>=1.24.0
+pillow>=10.0.0
+gtts>=2.3.0
+pygame>=2.5.0
+pyaudio>=0.2.11
+speechrecognition>=3.10.0
+requests>=2.31.0
+
+# Additional dependencies for Discord integration
+PyNaCl>=1.5.0  # Required for Discord voice
+ffmpeg-python>=0.2.0  # For audio processing
+wave  # Built-in, but good to note
+
+# Optional for better performance
+pydub>=0.25.0  # Audio manipulation
+numpy>=1.24.0  # Already listed but important for audio
+
+# Raspberry Pi specific (if running on Pi)
+# RPi.GPIO>=0.7.0  # Uncomment when running on Raspberry Pi
+# picamera2>=0.3.0  # Uncomment when running on Raspberry Pi
+
+# Development and testing
+pytest>=7.0.0
+python-dotenv>=1.0.0 

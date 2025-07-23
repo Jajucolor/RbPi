@@ -62,6 +62,11 @@ class AICompanion:
         # Speech integration (will be set by main system)
         self.speech_manager = None
         
+        # Obstacle detection integration
+        self.obstacle_warnings_enabled = True
+        self.last_obstacle_warning = None
+        self.obstacle_warning_cooldown = 5  # Seconds between same-level warnings
+        
         # Proactive interaction thread
         self.proactive_thread = None
         self.companion_active = False
@@ -174,8 +179,7 @@ class AICompanion:
         # Create enhanced response based on personality
         enhanced_response = self.generate_companion_response(
             f"I can see: {image_description}",
-            context_type="vision_analysis",
-            user_input="visual environment analysis"
+            context_type="vision_analysis"
         )
         
         return enhanced_response
@@ -191,6 +195,57 @@ class AICompanion:
         self.add_to_history("assistant", response, "conversation")
         
         return response
+    
+    def handle_obstacle_warning(self, distance_cm: float, urgency: str, obstacle_level: str) -> str:
+        """Handle obstacle detection and generate appropriate warning"""
+        if not self.obstacle_warnings_enabled:
+            return None
+        
+        # Check cooldown to prevent spam
+        current_time = datetime.now()
+        if (self.last_obstacle_warning and 
+            (current_time - self.last_obstacle_warning).total_seconds() < self.obstacle_warning_cooldown):
+            return None
+        
+        # Generate context-aware obstacle warning
+        if urgency == "critical":
+            warning_context = f"URGENT OBSTACLE ALERT: There is a very close obstacle at {distance_cm} centimeters directly ahead! Stop immediately and be extremely careful!"
+        elif urgency == "high":
+            warning_context = f"CAUTION: I detect an obstacle {distance_cm} centimeters ahead of you. Please slow down and navigate carefully around it."
+        elif urgency == "medium":
+            warning_context = f"AWARENESS: There's an object about {distance_cm} centimeters in front of you. Just letting you know so you can be mindful of it."
+        else:
+            return None  # Don't warn for low urgency
+        
+        # Generate personality-appropriate response
+        response = self.generate_companion_response(
+            warning_context,
+            context_type="obstacle_warning"
+        )
+        
+        # Update context and history
+        self.update_user_context("last_obstacle", {
+            "distance_cm": distance_cm,
+            "urgency": urgency,
+            "level": obstacle_level,
+            "warning_time": current_time.isoformat()
+        })
+        
+        self.add_to_history("system", f"Obstacle detected: {distance_cm}cm ({obstacle_level})", "obstacle_detection")
+        self.add_to_history("assistant", response, "obstacle_warning")
+        
+        self.last_obstacle_warning = current_time
+        return response
+    
+    def handle_distance_update(self, distance_cm: float, status: str):
+        """Handle regular distance updates (non-obstacle)"""
+        # Update context for potential conversation reference
+        if status == "clear":
+            self.update_user_context("current_environment", {
+                "path_status": "clear",
+                "forward_distance_cm": distance_cm,
+                "last_update": datetime.now().isoformat()
+            })
     
     def generate_companion_response(self, user_input: str, context_type: str = "general", 
                                   user_input_type: str = "question") -> str:
@@ -261,7 +316,12 @@ Offer relevant assistance when appropriate.""",
             
             "proactive": """
 You are checking in proactively with the user. 
-Be considerate of their time while offering helpful assistance or interesting observations."""
+Be considerate of their time while offering helpful assistance or interesting observations.""",
+            
+            "obstacle_warning": """
+You are providing a critical safety warning about an obstacle detected by the ultrasonic sensor.
+Be clear, urgent when necessary, but also reassuring. Focus on immediate safety and navigation guidance.
+Keep the response concise but informative. Match the urgency level to your tone."""
         }
         
         return base_personality + context_specific.get(context_type, "")
@@ -393,6 +453,19 @@ Be considerate of their time while offering helpful assistance or interesting ob
         status = "enabled" if enabled else "disabled"
         self.speak(f"Proactive mode {status}.")
         self.logger.info(f"Proactive mode {status}")
+    
+    def enable_obstacle_warnings(self, enabled: bool = True):
+        """Enable or disable obstacle warnings"""
+        self.obstacle_warnings_enabled = enabled
+        status = "enabled" if enabled else "disabled"
+        self.speak(f"Obstacle detection warnings {status}.")
+        self.logger.info(f"Obstacle warnings {status}")
+    
+    def set_obstacle_warning_cooldown(self, seconds: int):
+        """Set cooldown time between obstacle warnings"""
+        self.obstacle_warning_cooldown = seconds
+        self.speak(f"Obstacle warning cooldown set to {seconds} seconds.")
+        self.logger.info(f"Obstacle warning cooldown: {seconds}s")
     
     def get_conversation_summary(self) -> str:
         """Get a summary of recent conversation"""

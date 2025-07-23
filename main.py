@@ -20,6 +20,7 @@ from modules.config_manager import ConfigManager
 from modules.button_manager import ButtonManager
 from modules.voice_command_manager import VoiceCommandManager
 from modules.ai_companion import AICompanion
+from modules.ultrasonic_sensor import UltrasonicSensor
 
 # Configure logging
 logging.basicConfig(
@@ -82,12 +83,25 @@ class AssistiveGlasses:
         self.voice_command_manager.set_capture_callback(self.voice_capture)
         self.voice_command_manager.set_shutdown_callback(self.shutdown)
         
+        # Initialize ultrasonic sensor for obstacle detection
+        sensor_config = self.config.get('ultrasonic_sensor', {})
+        self.ultrasonic_sensor = UltrasonicSensor(
+            trigger_pin=sensor_config.get('trigger_pin', 23),
+            echo_pin=sensor_config.get('echo_pin', 24),
+            obstacle_threshold_cm=sensor_config.get('obstacle_threshold_cm', 100.0),
+            csv_file=sensor_config.get('csv_file', 'distance_log.csv')
+        )
+        
         # Connect AI companion to voice command manager and speech system
         self.ai_companion.set_speech_manager(self.speech)
         conversation_priority = companion_config.get('conversation_priority', True)
         self.voice_command_manager.set_companion(self.ai_companion, conversation_priority)
         
-        self.logger.info("Assistive glasses system initialized")
+        # Set up ultrasonic sensor callbacks
+        self.ultrasonic_sensor.set_obstacle_callback(self.handle_obstacle_detection)
+        self.ultrasonic_sensor.set_distance_callback(self.handle_distance_update)
+        
+        self.logger.info("Assistive glasses system with obstacle detection initialized")
     
     def start(self):
         """Start the main system loop"""
@@ -96,6 +110,10 @@ class AssistiveGlasses:
         
         # Start AI companion (includes welcome message)
         self.ai_companion.start_companion()
+        
+        # Start ultrasonic sensor monitoring
+        sensor_interval = self.config.get('ultrasonic_sensor', {}).get('reading_interval', 0.5)
+        self.ultrasonic_sensor.start_monitoring(reading_interval=sensor_interval)
         
         # Start button monitoring (as backup)
         self.button_manager.start_monitoring()
@@ -145,6 +163,45 @@ class AssistiveGlasses:
         self.speech.speak("Voice command received. Capturing image now.")
         # Use the same capture logic as manual capture
         self.manual_capture()
+    
+    def handle_obstacle_detection(self, reading, analysis):
+        """Handle obstacle detection from ultrasonic sensor"""
+        try:
+            # Get INTA's obstacle warning response
+            warning_response = self.ai_companion.handle_obstacle_warning(
+                distance_cm=reading.distance_cm,
+                urgency=analysis['urgency'],
+                obstacle_level=analysis['level']
+            )
+            
+            # Speak the warning if generated (respects cooldown)
+            if warning_response:
+                # Use urgent speech for critical obstacles
+                if analysis['urgency'] == 'critical':
+                    self.speech.speak_urgent(warning_response)
+                else:
+                    self.speech.speak(warning_response, interrupt=False)
+                
+                self.logger.warning(f"🚨 Obstacle warning: {reading.distance_cm}cm ({analysis['level']})")
+            
+        except Exception as e:
+            self.logger.error(f"Error handling obstacle detection: {str(e)}")
+    
+    def handle_distance_update(self, reading, analysis):
+        """Handle regular distance updates from ultrasonic sensor"""
+        try:
+            # Update INTA's environmental context
+            self.ai_companion.handle_distance_update(
+                distance_cm=reading.distance_cm,
+                status=analysis['level']
+            )
+            
+            # Log clear path information periodically
+            if analysis['level'] == 'clear' and reading.distance_cm > 200:
+                self.logger.debug(f"Path clear: {reading.distance_cm}cm ahead")
+            
+        except Exception as e:
+            self.logger.error(f"Error handling distance update: {str(e)}")
     
     def capture_and_analyze(self):
         """Capture image and analyze with OpenAI Vision"""
@@ -209,6 +266,9 @@ class AssistiveGlasses:
         
         if self.voice_command_manager:
             self.voice_command_manager.cleanup()
+        
+        if self.ultrasonic_sensor:
+            self.ultrasonic_sensor.cleanup()
         
         if self.ai_companion:
             self.ai_companion.cleanup()

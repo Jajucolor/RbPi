@@ -55,6 +55,21 @@ class ConfigManager:
                 "idle_threshold": 180,
                 "constant_listening": True,
                 "conversation_priority": True
+            },
+            "ultrasonic_sensor": {
+                "trigger_pin": 23,
+                "echo_pin": 24,
+                "obstacle_threshold_cm": 100.0,
+                "close_threshold_cm": 30.0,
+                "medium_threshold_cm": 60.0,
+                "far_threshold_cm": 100.0,
+                "reading_interval": 0.5,
+                "csv_file": "distance_log.csv"
+            },
+            "discord": {
+                "token": "",
+                "command_prefix": "!",
+                "activity_name": "for voice commands | !join to start"
             }
         }
         
