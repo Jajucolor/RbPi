@@ -1,6 +1,6 @@
 {
   "openai": {
-    "api_key": "your-openai-api-key-here",
+    "api_key": "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",
     "model": "gpt-4o-mini",
     "max_tokens": 300,
     "temperature": 0.3
