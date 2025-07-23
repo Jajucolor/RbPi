@@ -1,12 +1,12 @@
 {
   "openai": {
-    "api_key": "your-open-ai-key",
+    "api_key": "your-openai-api-key-here",
     "model": "gpt-4o-mini",
     "max_tokens": 300,
     "temperature": 0.3
   },
   "discord": {
-    "token": "discord-bot-token",
+    "token": "your-discord-bot-token-here",
     "command_prefix": "!",
     "activity_name": "for voice commands | !join to start"
   },
