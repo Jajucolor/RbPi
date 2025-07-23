@@ -73,8 +73,6 @@ class VoiceCommandManager:
         # Recognition state
         self.listening = False
         self.recognition_thread = None
-        self.microphone_active = False  # Continuously active microphone
-        self.audio_stream = None
         self.whisper_model = None
         self.audio_interface = None
         
@@ -133,42 +131,6 @@ class VoiceCommandManager:
             self.logger.error(f"Failed to initialize audio interface: {str(e)}")
             self.audio_interface = None
     
-    def _initialize_continuous_audio_stream(self):
-        """Initialize continuous audio stream for constant listening"""
-        if not self.audio_interface:
-            return False
-        
-        try:
-            # Create continuous audio stream
-            self.audio_stream = self.audio_interface.open(
-                format=self.format,
-                channels=self.channels,
-                rate=self.sample_rate,
-                input=True,
-                frames_per_buffer=self.chunk_size,
-                stream_callback=None  # We'll read manually for better control
-            )
-            
-            self.microphone_active = True
-            self.logger.info("🎙️ Continuous audio stream initialized - INTA is now constantly listening")
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"Failed to initialize continuous audio stream: {str(e)}")
-            return False
-    
-    def _close_continuous_audio_stream(self):
-        """Close continuous audio stream"""
-        if self.audio_stream:
-            try:
-                self.audio_stream.stop_stream()
-                self.audio_stream.close()
-                self.audio_stream = None
-                self.microphone_active = False
-                self.logger.info("🎙️ Continuous audio stream closed")
-            except Exception as e:
-                self.logger.error(f"Error closing audio stream: {str(e)}")
-    
     def set_capture_callback(self, callback: Callable):
         """Set the callback function for capture commands"""
         self.capture_callback = callback
@@ -206,7 +168,7 @@ class VoiceCommandManager:
             self.logger.info(f"Added shutdown command: '{command}'")
     
     def start_listening(self):
-        """Start continuous listening for voice commands with active microphone"""
+        """Start listening for voice commands"""
         if self.listening:
             self.logger.warning("Voice command listening already started")
             return
@@ -215,40 +177,31 @@ class VoiceCommandManager:
         
         if (WHISPER_AVAILABLE and PYAUDIO_AVAILABLE and 
             self.whisper_model is not None and self.audio_interface is not None):
-            
-            # Initialize continuous audio stream
-            if self._initialize_continuous_audio_stream():
-                # Start continuous listening thread
-                self.recognition_thread = threading.Thread(target=self._continuous_listen, daemon=True)
-                self.recognition_thread.start()
-                self.logger.info("🎙️ INTA started continuous listening with active microphone")
-            else:
-                self.logger.error("Failed to start continuous audio stream")
-                self.listening = False
+            # Real speech recognition with Whisper
+            self.recognition_thread = threading.Thread(target=self._listen_for_commands, daemon=True)
+            self.recognition_thread.start()
+            self.logger.info("Started Whisper voice command recognition")
         else:
             # Simulation mode
             self.logger.info("Running in simulation mode - voice commands disabled")
     
     def stop_listening(self):
-        """Stop continuous listening and close microphone"""
+        """Stop listening for voice commands"""
         self.listening = False
-        
-        # Close continuous audio stream
-        self._close_continuous_audio_stream()
         
         if self.recognition_thread and self.recognition_thread.is_alive():
             self.recognition_thread.join(timeout=3)
         
-        self.logger.info("🎙️ INTA stopped continuous listening - microphone closed")
+        self.logger.info("Voice command listening stopped")
     
-    def _continuous_listen(self):
-        """Continuously listen for voice commands using active microphone (runs in separate thread)"""
-        self.logger.info("🎙️ INTA continuous listener started - microphone is constantly active for natural conversation")
+    def _listen_for_commands(self):
+        """Listen for voice commands using Whisper (runs in separate thread)"""
+        self.logger.info("Whisper voice command listener started. Say 'capture' or 'analyze' to take a picture.")
         
-        while self.listening and self.microphone_active:
+        while self.listening:
             try:
-                # Record audio chunk from continuous stream
-                audio_data = self._record_from_continuous_stream()
+                # Record audio chunk
+                audio_data = self._record_audio_chunk()
                 
                 if audio_data is not None and self._has_speech(audio_data):
                     # Save to temporary file
@@ -259,7 +212,7 @@ class VoiceCommandManager:
                         text = self._transcribe_audio(temp_file)
                         
                         if text:
-                            self.logger.info(f"🎙️ INTA heard: '{text}'")
+                            self.logger.info(f"Whisper heard: '{text}'")
                             self._process_command(text)
                         
                         # Clean up temporary file
@@ -272,51 +225,11 @@ class VoiceCommandManager:
                 time.sleep(0.1)
                 
             except Exception as e:
-                self.logger.error(f"Error in INTA continuous listener: {str(e)}")
+                self.logger.error(f"Error in Whisper voice command listener: {str(e)}")
                 time.sleep(1)
-                
-        self.logger.info("🎙️ INTA continuous listener stopped")
-    
-    def _listen_for_commands(self):
-        """Legacy method - now redirects to continuous listening"""
-        self._continuous_listen()
-    
-    def _record_from_continuous_stream(self) -> Optional[np.ndarray]:
-        """Record a chunk of audio from the continuous audio stream"""
-        if not self.audio_stream or not self.microphone_active:
-            return None
-        
-        try:
-            frames = []
-            frames_to_record = int(self.sample_rate * self.chunk_duration / self.chunk_size)
-            
-            for _ in range(frames_to_record):
-                if not self.listening or not self.microphone_active:
-                    break
-                
-                try:
-                    # Read from continuous stream
-                    data = self.audio_stream.read(self.chunk_size, exception_on_overflow=False)
-                    frames.append(data)
-                except Exception as e:
-                    self.logger.warning(f"Error reading from audio stream: {e}")
-                    break
-            
-            if not frames:
-                return None
-            
-            # Convert to numpy array
-            audio_data = b''.join(frames)
-            audio_array = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
-            
-            return audio_array
-            
-        except Exception as e:
-            self.logger.error(f"Error recording from continuous stream: {str(e)}")
-            return None
     
     def _record_audio_chunk(self) -> Optional[np.ndarray]:
-        """Legacy method - record a chunk of audio from microphone (for backward compatibility)"""
+        """Record a chunk of audio from microphone"""
         try:
             # Open audio stream
             stream = self.audio_interface.open(
@@ -574,38 +487,23 @@ class VoiceCommandManager:
             self.logger.error(f"Error cleaning up temp files: {str(e)}")
     
     def cleanup(self):
-        """Clean up voice command resources and close active microphone"""
-        self.logger.info("🎙️ Cleaning up INTA voice command manager and closing microphone...")
+        """Clean up voice command resources"""
+        self.logger.info("Cleaning up voice command manager...")
         
-        # Stop listening and close continuous audio stream
+        # Stop listening
         self.stop_listening()
         
         # Clean up audio interface
         if self.audio_interface:
             try:
                 self.audio_interface.terminate()
-                self.audio_interface = None
-                self.logger.info("🎙️ Audio interface terminated")
             except Exception as e:
                 self.logger.error(f"Error terminating audio interface: {str(e)}")
         
         # Clean up temporary files
         self.cleanup_temp_files()
         
-        self.logger.info("🎙️ INTA voice command manager cleanup complete")
-    
-    def get_microphone_status(self) -> dict:
-        """Get current microphone and listening status"""
-        return {
-            "microphone_active": self.microphone_active,
-            "listening": self.listening,
-            "audio_stream_active": self.audio_stream is not None,
-            "audio_interface_available": self.audio_interface is not None,
-            "whisper_model_loaded": self.whisper_model is not None,
-            "simulation_mode": self.simulation_mode,
-            "companion_mode": self.companion_mode,
-            "conversation_priority": self.conversation_priority
-        }
+        self.logger.info("Voice command manager cleanup complete")
     
     def __del__(self):
         """Destructor to ensure cleanup"""

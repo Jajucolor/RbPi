@@ -4,17 +4,13 @@ A Raspberry Pi-based assistive device that uses computer vision and AI to help v
 
 ## Features
 
-### 🕶️ Physical Glasses System
-- **INTA - Constantly Listening AI Companion**: Always-active microphone with intelligent conversational AI that responds to everything you say
-- **Real-time Obstacle Detection**: Ultrasonic sensor continuously monitors for obstacles and provides intelligent warnings through INTA
-- **CSV Data Logging**: All distance measurements are automatically saved to CSV files for analysis and tracking
-- **Natural Conversation**: No wake words needed - just start talking and INTA responds naturally with contextual intelligence
-- **Smart Obstacle Warnings**: INTA provides context-aware obstacle alerts with appropriate urgency levels (critical/high/medium)
-- **Real-time Environment Analysis**: Captures and analyzes surroundings using OpenAI's GPT-4 Vision API when requested
-- **Enhanced Vision Descriptions**: INTA processes and enhances image descriptions with personality and contextual understanding
-- **Multiple Personalities**: Choose from INTA (default), helpful assistant, J.A.R.V.I.S., or friendly companion personalities
-- **Proactive Assistance**: INTA checks in regularly and offers help based on your activity patterns
-- **Continuous Voice Recognition**: Always-active microphone using OpenAI Whisper for offline, privacy-preserving speech processing
+- **AI Companion**: Intelligent conversational AI inspired by J.A.R.V.I.S. and Jaison - chat naturally, get proactive assistance
+- **Real-time Environment Analysis**: Captures and analyzes surroundings using OpenAI's GPT-4 Vision API
+- **Enhanced Vision Descriptions**: AI companion processes and enhances image descriptions with contextual intelligence  
+- **Multiple Personalities**: Choose from helpful assistant, J.A.R.V.I.S., or friendly companion personalities
+- **Proactive Assistance**: AI companion checks in and offers help based on your activity patterns
+- **Voice Activation**: Hands-free voice commands and natural conversation using OpenAI Whisper
+- **Offline Voice Recognition**: Privacy-preserving speech recognition that works without internet
 - **High-Quality Audio**: Google Text-to-Speech (gTTS) for clear, natural speech output
 
 ### 🤖 Discord Bot Integration
@@ -117,17 +113,10 @@ A Raspberry Pi-based assistive device that uses computer vision and AI to help v
    python3 main.py
    ```
 
-3. **Usage with INTA and Obstacle Detection**
-   - **🎙️ Just start talking** - INTA's microphone is always active and responds to everything
-   - **🚨 Automatic obstacle warnings** - INTA monitors distance continuously and warns about obstacles:
-     - *"URGENT: Very close obstacle at 25cm! Stop immediately!"* (Critical)
-     - *"Caution: Obstacle ahead at 45cm. Slow down."* (High priority)
-     - *"Obstacle detected 85cm ahead. Be aware."* (Medium priority)
-   - **💬 Natural conversation**: "Hi INTA, how are you?", "I'm feeling nervous", "What should I do?"
-   - **📷 Vision analysis**: "Take a picture" or "Capture image" to analyze surroundings
-   - **🛑 System control**: "Shutdown" or "quit" to safely exit
-   - **⏰ Proactive assistance**: INTA checks in when you're quiet: "How can I help you navigate?"
-   - **📊 CSV logging**: All distance data automatically saved to `distance_log.csv`
+3. **Usage**
+   - Say "capture", "analyze", or "take picture" to analyze surroundings
+   - Listen to audio description
+   - Say "shutdown" or "quit" to safely exit
    - Buttons also work as backup (capture: GPIO 18, shutdown: GPIO 3)
 
 ## 🤖 Discord Bot Quick Start

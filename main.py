@@ -265,7 +265,7 @@ class AssistiveGlasses:
             self.button_manager.stop_monitoring()
         
         if self.voice_command_manager:
-            self.voice_command_manager.cleanup()
+            self.voice_command_manager.stop_listening()
         
         if self.ultrasonic_sensor:
             self.ultrasonic_sensor.cleanup()
