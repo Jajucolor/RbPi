@@ -4,13 +4,13 @@ A Raspberry Pi-based assistive device that uses computer vision and AI to help v
 
 ## Features
 
-- **AI Companion**: Intelligent conversational AI inspired by J.A.R.V.I.S. and Jaison - chat naturally, get proactive assistance
-- **Real-time Environment Analysis**: Captures and analyzes surroundings using OpenAI's GPT-4 Vision API
-- **Enhanced Vision Descriptions**: AI companion processes and enhances image descriptions with contextual intelligence  
-- **Multiple Personalities**: Choose from helpful assistant, J.A.R.V.I.S., or friendly companion personalities
-- **Proactive Assistance**: AI companion checks in and offers help based on your activity patterns
-- **Voice Activation**: Hands-free voice commands and natural conversation using OpenAI Whisper
-- **Offline Voice Recognition**: Privacy-preserving speech recognition that works without internet
+- **INTA - Constantly Listening AI Companion**: Always-active microphone with intelligent conversational AI that responds to everything you say
+- **Natural Conversation**: No wake words needed - just start talking and INTA responds naturally with contextual intelligence
+- **Real-time Environment Analysis**: Captures and analyzes surroundings using OpenAI's GPT-4 Vision API when requested
+- **Enhanced Vision Descriptions**: INTA processes and enhances image descriptions with personality and contextual understanding
+- **Multiple Personalities**: Choose from INTA (default), helpful assistant, J.A.R.V.I.S., or friendly companion personalities
+- **Proactive Assistance**: INTA checks in regularly and offers help based on your activity patterns
+- **Continuous Voice Recognition**: Always-active microphone using OpenAI Whisper for offline, privacy-preserving speech processing
 - **High-Quality Audio**: Google Text-to-Speech (gTTS) for clear, natural speech output
 - **Modular Design**: Well-organized codebase with separate modules for different functionalities
 - **Configurable**: Customizable settings for camera, speech, companion personality, and system behavior
@@ -94,10 +94,12 @@ A Raspberry Pi-based assistive device that uses computer vision and AI to help v
    python3 main.py
    ```
 
-3. **Usage**
-   - Say "capture", "analyze", or "take picture" to analyze surroundings
-   - Listen to audio description
-   - Say "shutdown" or "quit" to safely exit
+3. **Usage with INTA**
+   - **Just start talking** - INTA's microphone is always active and responds to everything
+   - **Natural conversation**: "Hi INTA, how are you?", "I'm feeling nervous", "What should I do?"
+   - **Vision analysis**: "Take a picture" or "Capture image" to analyze surroundings
+   - **System control**: "Shutdown" or "quit" to safely exit
+   - **Proactive assistance**: INTA checks in when you're quiet: "How can I help you navigate?"
    - Buttons also work as backup (capture: GPIO 18, shutdown: GPIO 3)
 
 ## Detailed Setup

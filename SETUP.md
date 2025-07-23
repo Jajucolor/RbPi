@@ -1,6 +1,6 @@
-# Assistive Glasses System Setup Guide
+# INTA Assistive Glasses Setup Guide
 
-This guide will help you set up the voice-activated assistive glasses system on your Raspberry Pi using OpenAI Whisper for offline voice recognition and gTTS for high-quality speech output.
+This guide will help you set up INTA (Intelligent Navigation and Assistance Companion) - your constantly listening AI companion on Raspberry Pi. INTA uses an always-active microphone with OpenAI Whisper for continuous voice recognition and gTTS for natural speech output.
 
 ## Hardware Requirements
 
@@ -9,9 +9,11 @@ This guide will help you set up the voice-activated assistive glasses system on 
 - **Raspberry Pi Camera Module v2 or v3**
 - **MicroSD card** (32GB or larger, Class 10, fast read/write speeds recommended)
 - **Power supply** (5V, 3A - stable power important for AI processing)
-- **USB microphone or USB headset** (primary input method)
-- **Speakers or headphones** with 3.5mm jack or USB audio
+- **🎙️ High-quality USB microphone or USB headset** (CRITICAL - must be constantly active for INTA)
+- **🔊 Speakers or headphones** with 3.5mm jack or USB audio (headphones recommended to prevent feedback)
 - **Internet connection** (for OpenAI vision API and initial Whisper model download)
+
+⚠️ **IMPORTANT**: Since INTA's microphone is constantly active, use headphones to prevent audio feedback loops. A high-quality USB microphone is essential for accurate continuous voice recognition.
 
 ### Optional Components (Backup/Enhanced Features)
 - Push buttons (2x momentary push buttons) - Physical backup controls
@@ -227,38 +229,52 @@ This guide will help you set up the voice-activated assistive glasses system on 
    python3 test_gtts.py
    ```
 
-4. **Test Whisper voice recognition (IMPORTANT)**
+4. **Test Whisper voice recognition and continuous microphone (CRITICAL)**
    ```bash
    python3 test_voice_commands.py
    # This will:
    # - Download Whisper model on first run (~74MB)
-   # - Test microphone detection
-   # - Test voice recognition accuracy
+   # - Test microphone detection and continuous stream setup
+   # - Test voice recognition accuracy with active microphone
    # - Verify all voice command functionality
+   # - Test continuous listening behavior
    ```
 
-5. **Test AI Companion (NEW)**
+5. **Test INTA Continuous Listening (NEW & CRITICAL)**
+   ```bash
+   python3 test_inta_conversation.py
+   # This will test:
+   # - INTA's constantly active microphone behavior
+   # - Natural conversation without wake words
+   # - Vision analysis enhancement with INTA personality
+   # - Continuous listening workflow
+   # - Interactive chat with always-active microphone
+   # - Speech integration and feedback prevention
+   ```
+   
+6. **Test All AI Companion Personalities**
    ```bash
    python3 test_ai_companion.py
    # This will test:
-   # - Different personality modes (J.A.R.V.I.S., Assistant, Iris)
+   # - Different personality modes (INTA, J.A.R.V.I.S., Assistant, Iris)
    # - Vision analysis enhancement
    # - Conversation flow and context awareness
    # - Speech integration
    # - Interactive companion chat
    ```
 
-6. **Test physical buttons (if connected)**
+7. **Test physical buttons (if connected)**
    ```bash
    python3 modules/button_manager.py
    ```
 
-7. **Test complete system**
+8. **Test complete INTA system**
    ```bash
    python3 main.py
-   # System will start with voice activation ready
-   # Say "capture" or "analyze" to test image analysis
-   # Chat naturally with your AI companion
+   # INTA will start with constantly active microphone
+   # Just start talking - no wake words needed
+   # Say "take a picture" to test enhanced vision analysis
+   # Chat naturally with INTA about anything
    # Say "shutdown" or use Ctrl+C to exit
    ```
 
@@ -266,32 +282,37 @@ This guide will help you set up the voice-activated assistive glasses system on 
 
 ### Basic Usage
 
-1. **Start the system**
+1. **Start INTA**
    ```bash
    source glasses_env/bin/activate  # Activate virtual environment
    python3 main.py
    ```
    
-   The system will announce: *"Assistive glasses system starting. Say 'capture' or 'analyze' to take a picture and analyze your surroundings."*
-
-2. **Primary Interface: Voice Commands & Conversation**
+   INTA will greet you: *"Hello! I'm INTA, your intelligent navigation and assistance companion. I'm here to help you see, understand, and navigate the world around you. How can I assist you today?"*
    
-   **Capture Commands:**
-   - **"capture"** / **"analyze"** / **"take picture"** → Capture and analyze surroundings
-   - **"describe"** / **"look"** / **"see"** / **"show me"** → Same as capture
-   - **"what do you see"** / **"examine"** / **"scan"** → Same as capture
+   🎙️ **The microphone is now constantly active** - INTA is listening and ready to respond to everything you say!
+
+2. **INTA's Constantly Active Listening**
+   
+   🎙️ **Just Start Talking** - No wake words needed! INTA responds to everything:
+   
+   **Natural Conversation** (INTA's Primary Mode):
+   - **"Hello INTA, how are you today?"** → Natural greeting and status
+   - **"I'm feeling nervous about going out"** → Supportive encouragement and advice
+   - **"What can you help me with?"** → Comprehensive assistance information
+   - **"Tell me about my surroundings"** → Proactive environment guidance
+   - **"What should I do if I get lost?"** → Practical navigation suggestions
+   - **"I heard a strange noise, what could it be?"** → Contextual analysis and reassurance
+   - **"Thank you for being so helpful"** → Acknowledgment and continued support
+   - **Any natural speech** → INTA responds contextually with intelligence and personality!
+   
+   **Explicit Capture Commands** (For Vision Analysis):
+   - **"Take a picture"** / **"Capture image"** → Triggers camera capture and enhanced analysis
+   - **"Analyze surroundings"** / **"Scan environment"** → Same as above
+   - **"Capture now"** / **"Take photo"** → Same as above
    
    **System Commands:**
-   - **"shutdown"** / **"quit"** / **"exit"** / **"goodbye"** → Safely shutdown system
-   - **"stop"** / **"sleep"** / **"standby"** / **"power off"** → Same as shutdown
-   
-   **Natural Conversation** (NEW AI Companion Feature):
-   - **"Hello"** / **"How are you?"** → Chat with your AI companion
-   - **"What can you help me with?"** → Get assistance information
-   - **"I'm feeling nervous about going out"** → Receive encouragement and support
-   - **"Tell me about my surroundings"** → Request proactive environment analysis
-   - **"What should I do if I get lost?"** → Get guidance and suggestions
-   - Any natural conversation is supported - your AI companion will respond contextually!
+   - **"Shutdown"** / **"Quit"** / **"Exit"** / **"Goodbye"** → Safely shutdown INTA
 
 3. **AI Companion Personalities**
    
@@ -315,14 +336,105 @@ This guide will help you set up the voice-activated assistive glasses system on 
    - **Capture Button** (GPIO 18): Press to capture and analyze surroundings  
    - **Shutdown Button** (GPIO 3): Press to safely shutdown the system
 
-5. **Enhanced System Workflow with INTA**
-   - **INTA is constantly listening** - treats everything as conversation by default
-   - **Natural Conversation** → Just speak naturally, INTA responds immediately with contextual intelligence
-   - **Explicit Capture Commands** → Say *"take a picture"* or *"capture image"* for vision analysis
-   - **Enhanced Vision Analysis** → INTA processes images with personality and provides detailed, helpful descriptions
-   - **Proactive Assistance** → INTA checks in regularly: *"Hi there! I'm always listening. How can I help you navigate?"*
-   - **Context Awareness** → INTA remembers your conversations and builds understanding over time
-   - **Always Ready** → No wake words needed, just start talking and INTA responds instantly
+5. **INTA's Continuous Operation with Active Microphone**
+   - **🎙️ Microphone Always Active** → Continuous audio stream processing for instant response
+   - **🗣️ Instant Response** → Just speak naturally, INTA responds immediately with contextual intelligence  
+   - **🔄 Conversation Priority** → Everything is treated as natural conversation first
+   - **📷 On-Demand Vision** → Say *"take a picture"* or *"capture image"* for enhanced visual analysis
+   - **🧠 Contextual Memory** → INTA remembers your conversations and builds understanding over time
+   - **⏰ Proactive Check-ins** → INTA initiates contact: *"Hi there! I'm always listening. How can I help you navigate?"*
+   - **🚫 No Wake Words** → Just start talking - INTA is always ready and listening
+   - **🎧 Feedback Prevention** → Use headphones to prevent INTA from hearing its own voice
+   
+   ⚠️ **Privacy Note**: The microphone is constantly active but all processing is done locally with Whisper. Only vision analysis uses external APIs.
+
+## Troubleshooting INTA's Continuous Microphone
+
+### Common Issues with Always-Active Microphone
+
+**🔊 Audio Feedback Loop (CRITICAL)**
+- **Problem**: INTA hears its own voice and responds in a loop
+- **Solution**: **Always use headphones** when running INTA
+- **Alternative**: Mute speakers when INTA is talking (requires additional setup)
+- **Test**: Run `python3 test_inta_conversation.py` with and without headphones
+
+**🎙️ Microphone Not Detected**
+- **Check microphone**: `arecord -l` should list your USB microphone
+- **Test recording**: `arecord -d 3 -f cd test.wav` then `aplay test.wav`
+- **USB power**: Try different USB ports, some provide more power
+- **Permissions**: Add user to audio group: `sudo usermod -a -G audio $USER`
+
+**🗣️ Poor Voice Recognition**
+- **Background noise**: Use a directional USB microphone
+- **Distance**: Stay within 2 feet of microphone for best results
+- **Audio quality**: Check `python3 test_voice_commands.py` recognition accuracy
+- **Model size**: Try larger Whisper model in config: `"model_size": "small"` or `"medium"`
+
+**⚡ High CPU Usage**
+- **Whisper model**: Use `"base"` model for lower CPU usage
+- **Chunk duration**: Increase `"chunk_duration": 3.0` in config to reduce processing frequency
+- **Background processes**: Close unnecessary applications
+
+**🔄 INTA Not Responding**
+- **Check microphone status**: Look for "🎙️ INTA continuous listener started" in logs
+- **Audio stream**: Verify "Continuous audio stream initialized" message
+- **Conversation priority**: Ensure `"conversation_priority": true` in config
+- **Test manually**: Use interactive mode in `test_inta_conversation.py`
+
+**📦 Missing Dependencies**
+- **PyAudio installation**: `sudo apt install portaudio19-dev python3-pyaudio`
+- **Whisper dependencies**: `pip install openai-whisper torch`
+- **Audio libraries**: `sudo apt install alsa-utils`
+
+### Debugging Commands
+
+**Check INTA Status:**
+```bash
+# In Python interactive shell
+python3 -c "
+from modules.voice_command_manager import VoiceCommandManager
+vm = VoiceCommandManager()
+print(vm.get_microphone_status())
+"
+```
+
+**Monitor Audio Levels:**
+```bash
+# Real-time audio monitoring
+alsamixer
+# Or monitor recording levels
+arecord -vv -f cd /dev/null
+```
+
+**Test Continuous Audio Stream:**
+```bash
+# Test microphone with continuous recording
+python3 -c "
+import pyaudio
+import time
+pa = pyaudio.PyAudio()
+stream = pa.open(format=pyaudio.paInt16, channels=1, rate=16000, input=True, frames_per_buffer=1024)
+print('Microphone active - speak now!')
+for i in range(50):  # 5 seconds
+    data = stream.read(1024)
+    print(f'Audio chunk {i}: {len(data)} bytes')
+    time.sleep(0.1)
+stream.close()
+pa.terminate()
+"
+```
+
+### Performance Optimization
+
+**For Better Response Time:**
+- Use `"chunk_duration": 2.0` for faster processing
+- Reduce `"silence_threshold": 0.005` for more sensitive detection
+- Use SSD storage for faster model loading
+
+**For Lower Resource Usage:**
+- Use `"model_size": "tiny"` for minimal CPU usage
+- Increase `"chunk_duration": 4.0` for less frequent processing
+- Disable proactive mode: `"proactive_mode": false`
 
 ### Auto-start on Boot
 
