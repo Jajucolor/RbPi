@@ -1,12 +1,12 @@
 {
   "openai": {
-    "api_key": "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",
+    "api_key": "your-open-ai-key",
     "model": "gpt-4o-mini",
     "max_tokens": 300,
     "temperature": 0.3
   },
   "discord": {
-    "token": "MTM1MDczMDQ5NTY1ODU2MTU0Ng.GWpLP2._x4yl0cLpf-Hr91qfbbP2afYMv16SOKfEcYER4",
+    "token": "discord-bot-token",
     "command_prefix": "!",
     "activity_name": "for voice commands | !join to start"
   },
