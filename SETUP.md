@@ -180,10 +180,12 @@ This guide will help you set up the voice-activated assistive glasses system on 
      },
      "companion": {
        "model": "gpt-4o-mini",
-       "personality": "jarvis",
+       "personality": "inta",
        "voice_enabled": true,
        "proactive_mode": true,
-       "idle_threshold": 300
+       "idle_threshold": 180,
+       "constant_listening": true,
+       "conversation_priority": true
      },
      "system": {
        "capture_interval": 3,
@@ -293,7 +295,11 @@ This guide will help you set up the voice-activated assistive glasses system on 
 
 3. **AI Companion Personalities**
    
-   **J.A.R.V.I.S. (Default)** - Sophisticated and proactive like Tony Stark's AI
+   **INTA (Default)** - Your constantly listening intelligent navigation and assistance companion
+   - *"Hello! I'm INTA, your intelligent navigation and assistance companion. I'm here to help you see, understand, and navigate the world around you. How can I assist you today?"*
+   - Always listening, conversational, supportive, and adaptive to your needs
+   
+   **J.A.R.V.I.S.** - Sophisticated and proactive like Tony Stark's AI
    - *"Good day, sir. J.A.R.V.I.S. at your service. All systems are operational and ready to assist."*
    - Professional, intelligent, slightly formal but helpful
    
@@ -309,13 +315,14 @@ This guide will help you set up the voice-activated assistive glasses system on 
    - **Capture Button** (GPIO 18): Press to capture and analyze surroundings  
    - **Shutdown Button** (GPIO 3): Press to safely shutdown the system
 
-5. **Enhanced System Workflow**
-   - **Voice activation is always listening** for both commands and conversation
-   - **Capture Commands** → *"Voice command received. Capturing image now."* → Enhanced AI analysis with contextual intelligence
-   - **Conversation** → Natural responses from your AI companion based on personality
-   - **Proactive Assistance** → Your companion may check in periodically: *"How are you doing? Anything I can help with?"*
-   - **Context Awareness** → Your companion remembers recent conversations and environment analysis
-   - Ready for next interaction immediately (capture, conversation, or commands)
+5. **Enhanced System Workflow with INTA**
+   - **INTA is constantly listening** - treats everything as conversation by default
+   - **Natural Conversation** → Just speak naturally, INTA responds immediately with contextual intelligence
+   - **Explicit Capture Commands** → Say *"take a picture"* or *"capture image"* for vision analysis
+   - **Enhanced Vision Analysis** → INTA processes images with personality and provides detailed, helpful descriptions
+   - **Proactive Assistance** → INTA checks in regularly: *"Hi there! I'm always listening. How can I help you navigate?"*
+   - **Context Awareness** → INTA remembers your conversations and builds understanding over time
+   - **Always Ready** → No wake words needed, just start talking and INTA responds instantly
 
 ### Auto-start on Boot
 
@@ -562,3 +569,4 @@ htop  # Install with: sudo apt install htop
 - **Secure configuration**: Protect API keys and sensitive configuration data  
 - **User consent**: Ensure users understand what data is processed and how
 - **Backup systems**: Maintain traditional navigation methods as backup 
+ 

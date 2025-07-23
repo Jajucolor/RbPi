@@ -70,7 +70,7 @@ class AssistiveGlasses:
         self.ai_companion = AICompanion(
             api_key=self.config.get_openai_key(),
             model=companion_config.get('model', 'gpt-4o-mini'),
-            personality=companion_config.get('personality', 'jarvis'),
+            personality=companion_config.get('personality', 'inta'),
             voice_enabled=companion_config.get('voice_enabled', True)
         )
         
@@ -84,7 +84,8 @@ class AssistiveGlasses:
         
         # Connect AI companion to voice command manager and speech system
         self.ai_companion.set_speech_manager(self.speech)
-        self.voice_command_manager.set_companion(self.ai_companion)
+        conversation_priority = companion_config.get('conversation_priority', True)
+        self.voice_command_manager.set_companion(self.ai_companion, conversation_priority)
         
         self.logger.info("Assistive glasses system initialized")
     

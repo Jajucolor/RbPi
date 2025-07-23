@@ -62,7 +62,8 @@ A Raspberry Pi-based assistive device that uses computer vision and AI to help v
 - Handles natural conversation routing to AI companion
 
 ### AI Companion (`modules/ai_companion.py`)
-- Intelligent conversational AI with multiple personalities (Assistant, J.A.R.V.I.S., Iris)
+- **INTA**: Your intelligent navigation and assistance companion - constantly listening and responding
+- Multiple personalities available (INTA, Assistant, J.A.R.V.I.S., Iris)
 - Enhances vision analysis with contextual intelligence and natural language
 - Provides proactive assistance and check-ins based on user activity
 - Maintains conversation history and user context for better responses

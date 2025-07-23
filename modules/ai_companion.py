@@ -42,7 +42,8 @@ class AICompanion:
         # Companion behavior settings
         self.proactive_mode = True
         self.max_history = 20  # Keep last 20 exchanges
-        self.idle_threshold = 300  # 5 minutes before proactive check-in
+        self.idle_threshold = 180  # 3 minutes before proactive check-in (shorter for constant listening)
+        self.constant_listening = True  # Always ready to respond
         
         # Initialize OpenAI client
         if OPENAI_AVAILABLE and api_key:
@@ -68,6 +69,17 @@ class AICompanion:
     def load_personality(self, personality_name: str) -> Dict[str, Any]:
         """Load personality configuration"""
         personalities = {
+            "inta": {
+                "name": "INTA",
+                "greeting": "Hello! I'm INTA, your intelligent navigation and assistance companion. I'm here to help you see, understand, and navigate the world around you. How can I assist you today?",
+                "style": "Intelligent, constantly attentive, conversational, and supportive. Always ready to help with navigation, analysis, or just friendly conversation.",
+                "traits": ["intelligent", "attentive", "conversational", "supportive", "always-listening", "adaptive"],
+                "response_patterns": {
+                    "casual": "I'm always here listening. What would you like to talk about or explore?",
+                    "analysis": "Let me take a look at your surroundings and tell you what I see.",
+                    "encouragement": "You're doing wonderfully! I'm always here to support you."
+                }
+            },
             "helpful_assistant": {
                 "name": "Assistant",
                 "greeting": "Good day! I'm your AI assistant, ready to help you navigate and understand your environment.",
@@ -136,7 +148,13 @@ class AICompanion:
             "Take care! I'm always ready to help when you return."
         ]
         
-        if self.personality == "jarvis":
+        if self.personality == "inta":
+            farewell_messages = [
+                "Goodbye! It's been wonderful helping you navigate today. I'll be here whenever you need me.",
+                "Take care! INTA signing off, but I'll always be ready to listen and assist when you return.",
+                "Until next time! Remember, I'm always here to help you see and understand the world around you."
+            ]
+        elif self.personality == "jarvis":
             farewell_messages = [
                 "System shutting down. It has been an honor serving you, sir.",
                 "Goodbye, sir. All systems will remain in standby mode.",
@@ -295,7 +313,14 @@ Be considerate of their time while offering helpful assistance or interesting ob
             "I'm standing by if you'd like to explore or analyze anything interesting."
         ]
         
-        if self.personality == "jarvis":
+        if self.personality == "inta":
+            proactive_messages = [
+                "Hi there! I'm always listening. How can I help you navigate or understand your surroundings?",
+                "Just checking in - would you like me to analyze what's around you or chat about anything?",
+                "I'm here and ready to assist. What would you like to explore together?",
+                "How are you doing? I'm always here to help with navigation or just to talk."
+            ]
+        elif self.personality == "jarvis":
             proactive_messages = [
                 "Sir, all systems are running smoothly. Do you require any assistance?",
                 "Periodic status check - how may I be of service?",

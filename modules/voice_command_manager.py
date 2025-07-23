@@ -68,6 +68,7 @@ class VoiceCommandManager:
         # AI Companion integration
         self.companion_mode = False
         self.companion = None
+        self.conversation_priority = False  # Prioritize conversation over commands
         
         # Recognition state
         self.listening = False
@@ -145,11 +146,12 @@ class VoiceCommandManager:
         self.conversation_callback = callback
         self.logger.info("Conversation callback set")
     
-    def set_companion(self, companion):
+    def set_companion(self, companion, conversation_priority: bool = True):
         """Set the AI companion for conversational mode"""
         self.companion = companion
         self.companion_mode = True
-        self.logger.info("AI Companion integration enabled")
+        self.conversation_priority = conversation_priority
+        self.logger.info(f"AI Companion integration enabled (conversation priority: {conversation_priority})")
     
     def add_capture_command(self, command: str):
         """Add a new voice command that triggers capture"""
@@ -314,6 +316,33 @@ class VoiceCommandManager:
         """Process transcribed text for commands"""
         text_lower = text.lower().strip()
         
+        # If conversation priority is enabled, try conversation first
+        if self.conversation_priority and self.companion_mode and self.companion:
+            # Only check for explicit shutdown commands when in conversation priority mode
+            for command in self.shutdown_commands:
+                if command in text_lower:
+                    self.logger.info(f"Shutdown command detected: '{text}'")
+                    self._handle_shutdown_command()
+                    return
+            
+            # Check for very explicit capture commands (more specific matching)
+            explicit_capture_phrases = [
+                "take a picture", "capture image", "analyze surroundings", 
+                "take photo", "capture now", "scan environment"
+            ]
+            
+            for phrase in explicit_capture_phrases:
+                if phrase in text_lower:
+                    self.logger.info(f"Explicit capture command detected: '{text}'")
+                    self._handle_capture_command()
+                    return
+            
+            # Everything else goes to conversation
+            self.logger.info(f"Processing conversation: '{text}'")
+            self._handle_conversation(text)
+            return
+        
+        # Original command-first logic (when conversation priority is disabled)
         # Check for capture commands
         for command in self.capture_commands:
             if command in text_lower:

@@ -46,6 +46,15 @@ class ConfigManager:
                 "led_pin": 24,
                 "shutdown_pin": 3,
                 "debounce_time": 0.2
+            },
+            "companion": {
+                "model": "gpt-4o-mini",
+                "personality": "inta",
+                "voice_enabled": True,
+                "proactive_mode": True,
+                "idle_threshold": 180,
+                "constant_listening": True,
+                "conversation_priority": True
             }
         }
         

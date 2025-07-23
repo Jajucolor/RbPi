@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
 def test_companion_personalities():
     """Test different AI companion personalities"""
-    personalities = ["helpful_assistant", "jarvis", "friendly_companion"]
+    personalities = ["inta", "helpful_assistant", "jarvis", "friendly_companion"]
     
     for personality in personalities:
         print(f"\n=== Testing {personality.upper()} personality ===")
@@ -198,7 +198,7 @@ def interactive_companion_test():
     
     companion = AICompanion(
         api_key=None,  # Simulation mode - set your API key for real responses
-        personality="jarvis",
+        personality="inta",
         voice_enabled=False  # Set to True for speech output
     )
     
@@ -215,10 +215,10 @@ def interactive_companion_test():
                 fake_vision = "A room with chairs and tables, good lighting, clear path ahead"
                 response = companion.process_vision_analysis(fake_vision)
                 print(f"Vision Analysis: {fake_vision}")
-                print(f"J.A.R.V.I.S.: {response}")
+                print(f"INTA: {response}")
             elif user_input:
                 response = companion.handle_conversation(user_input)
-                print(f"J.A.R.V.I.S.: {response}")
+                print(f"INTA: {response}")
     
     except KeyboardInterrupt:
         print("\nInterrupted by user")

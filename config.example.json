@@ -38,9 +38,11 @@
   },
   "companion": {
     "model": "gpt-4o-mini",
-    "personality": "jarvis",
+    "personality": "inta",
     "voice_enabled": true,
     "proactive_mode": true,
-    "idle_threshold": 300
+    "idle_threshold": 180,
+    "constant_listening": true,
+    "conversation_priority": true
   }
 } 
