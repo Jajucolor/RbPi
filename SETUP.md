@@ -69,24 +69,9 @@ This guide will help you set up the assistive glasses system on your Raspberry P
    python3 -m venv glasses_env
    source glasses_env/bin/activate
    ```
-   ```bash
-   # 1. Deactivate and delete old venv
-   deactivate
-   rm -r ~/RbPi/glasses_env
-   
-   # 2. Recreate with --system-site-packages
-   cd ~/RbPi
    python3 -m venv glasses_env --system-site-packages
-   
-   # 3. Activate
-   source glasses_env/bin/activate
-   ```
-   ```bash
-   pip install openai
-   pip install gTTS
-   ```
 
-4. **Install Python dependencies**
+3. **Install Python dependencies**
    ```bash
    pip install -r requirements.txt
    ```
