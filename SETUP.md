@@ -72,6 +72,7 @@ This comprehensive guide will help you set up the assistive glasses system with 
    python3 -m venv glasses_env
    source glasses_env/bin/activate
    ```
+<<<<<<< HEAD
    
    **Alternative setup for system packages:**
    ```bash
@@ -86,6 +87,9 @@ This comprehensive guide will help you set up the assistive glasses system with 
    # 3. Activate
    source glasses_env/bin/activate
    ```
+=======
+   python3 -m venv glasses_env --system-site-packages
+>>>>>>> parent of ad9d886 (Update SETUP.md)
 
 3. **Install Python dependencies**
    ```bash
