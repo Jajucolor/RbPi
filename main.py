@@ -18,6 +18,7 @@ from modules.vision_analyzer import VisionAnalyzer
 from modules.speech_manager import SpeechManager
 from modules.config_manager import ConfigManager
 from modules.button_manager import ButtonManager
+from modules.inta_ai_manager import IntaAIManager
 
 # Configure logging
 logging.basicConfig(
@@ -54,9 +55,15 @@ class AssistiveGlasses:
         
         self.button_manager = ButtonManager()
         
+        # Initialize INTA AI assistant
+        self.inta_ai = IntaAIManager(self.config.get_config())
+        
         # Set up button callbacks
         self.button_manager.set_capture_callback(self.manual_capture)
         self.button_manager.set_shutdown_callback(self.shutdown)
+        
+        # Set up INTA AI response callback
+        self.inta_ai._emit_response = self.handle_inta_response
         
         self.logger.info("Assistive glasses system initialized")
     
@@ -66,10 +73,16 @@ class AssistiveGlasses:
         self.running = True
         
         # Welcome message
-        self.speech.speak("Assistive glasses system starting. Press the button to capture and analyze your surroundings.")
+        self.speech.speak("Assistive glasses system starting. INTA AI assistant is ready. Press the button to capture and analyze your surroundings.")
         
         # Start button monitoring
         self.button_manager.start_monitoring()
+        
+        # Start INTA AI listening
+        if self.inta_ai.start_listening():
+            self.speech.speak("INTA AI is now listening for voice commands.")
+        else:
+            self.speech.speak("INTA AI voice recognition is not available. Using button controls only.")
         
         # Start main loop
         self.main_loop()
@@ -148,6 +161,25 @@ class AssistiveGlasses:
         except Exception as e:
             self.logger.error(f"Error saving analysis log: {str(e)}")
     
+    def handle_inta_response(self, response: str):
+        """Handle responses from INTA AI assistant"""
+        try:
+            self.logger.info(f"INTA AI Response: {response}")
+            
+            # Speak the response
+            self.speech.speak(response)
+            
+            # Check if response contains commands for the system
+            if "capture" in response.lower() or "take picture" in response.lower():
+                self.manual_capture()
+            elif "describe" in response.lower() or "analyze" in response.lower():
+                self.manual_capture()
+            elif "shutdown" in response.lower() or "turn off" in response.lower():
+                self.shutdown()
+                
+        except Exception as e:
+            self.logger.error(f"Error handling INTA response: {str(e)}")
+    
     def shutdown(self):
         """Graceful shutdown of the system"""
         self.logger.info("Shutting down assistive glasses system...")
@@ -161,6 +193,9 @@ class AssistiveGlasses:
         
         if self.button_manager:
             self.button_manager.stop_monitoring()
+        
+        if self.inta_ai:
+            self.inta_ai.cleanup()
         
         # Wait for any running threads to complete
         if self.capture_thread and self.capture_thread.is_alive():

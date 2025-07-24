@@ -5,6 +5,18 @@
     "max_tokens": 300,
     "temperature": 0.3
   },
+  "jaison": {
+    "url": "http://localhost:8000",
+    "api_key": "your-jaison-api-key-here"
+  },
+  "inta": {
+    "sample_rate": 16000,
+    "chunk_size": 1024,
+    "record_seconds": 5,
+    "silence_threshold": 0.01,
+    "silence_duration": 1.0,
+    "whisper_model": "base"
+  },
   "camera": {
     "width": 1920,
     "height": 1080,
