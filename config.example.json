@@ -1,40 +1,51 @@
 {
   "openai": {
-    "api_key": "your-openai-api-key-here",
-    "model": "gpt-4o-mini",
-    "max_tokens": 300,
-    "temperature": 0.3
-  },
-  "inta": {
-    "sample_rate": 8000,
-    "chunk_size": 512,
-    "record_seconds": 5,
-    "silence_threshold": 0.01,
-    "silence_duration": 1.0,
-    "whisper_model": "tiny"
+      "api_key": "api_key",
+      "max_tokens": 300,
+      "temperature": 0.3
   },
   "camera": {
-    "width": 1920,
-    "height": 1080,
-    "quality": 85,
-    "auto_focus": true
+      "width": 1920,
+      "height": 1080,
+      "quality": 85,
+      "auto_focus": true
   },
   "speech": {
-    "rate": 150,
-    "volume": 0.9,
-    "voice_id": "",
-    "interrupt_on_capture": false
+      "rate": 350,
+      "volume": 0.9,
+      "voice_id": "",
+      "interrupt_on_capture": true,
+      "allow_interrupt": true,
+      "interrupt_threshold": 0.5,
+      "realtime_enabled": true,
+      "word_delay": 0.02,
+      "sentence_delay": 0.2,
+      "chunk_size": 1
   },
   "system": {
-    "capture_interval": 3,
-    "log_level": "INFO",
-    "save_images": true,
-    "save_analysis": true
+      "capture_interval": 3,
+      "log_level": "INFO",
+      "save_images": true,
+      "save_analysis": true
   },
   "hardware": {
-    "button_pin": 18,
-    "led_pin": 24,
-    "shutdown_pin": 3,
-    "debounce_time": 0.2
+      "button_pin": 18,
+      "led_pin": 24,
+      "shutdown_pin": 3,
+      "debounce_time": 0.2
+  },
+  "inta": {
+      "enabled": true,
+      "voice_interaction": true,
+      "command_recognition": true,
+      "conversation_history_length": 10,
+      "whisper_model": "tiny",
+      "audio_sample_rate": 8000,
+      "silence_threshold": 0.01,
+      "silence_duration": 0.2,
+      "listen_while_speaking": true,
+      "interrupt_speech": true,
+      "continuous_listening": true,
+      "background_listening": true
   }
 } 
