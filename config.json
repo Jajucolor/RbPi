@@ -1,7 +1,6 @@
 {
     "openai": {
-        "api_key": "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",
-        "model": "gpt-4o-mini",
+        "api_key": "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",
         "max_tokens": 300,
         "temperature": 0.3
     },
@@ -12,10 +11,16 @@
         "auto_focus": true
     },
     "speech": {
-        "rate": 150,
+        "rate": 250,
         "volume": 0.9,
         "voice_id": "",
-        "interrupt_on_capture": false
+        "interrupt_on_capture": true,
+        "allow_interrupt": true,
+        "interrupt_threshold": 0.5,
+        "realtime_enabled": true,
+        "word_delay": 0.05,
+        "sentence_delay": 0.2,
+        "chunk_size": 2
     },
     "system": {
         "capture_interval": 3,
@@ -34,9 +39,13 @@
         "voice_interaction": true,
         "command_recognition": true,
         "conversation_history_length": 10,
-        "whisper_model": "base",
-        "audio_sample_rate": 16000,
+        "whisper_model": "tiny",
+        "audio_sample_rate": 8000,
         "silence_threshold": 0.01,
-        "silence_duration": 1.0
+        "silence_duration": 0.2,
+        "listen_while_speaking": true,
+        "interrupt_speech": true,
+        "continuous_listening": true,
+        "background_listening": true
     }
 } 

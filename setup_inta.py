@@ -117,15 +117,6 @@ def create_config():
     if openai_key:
         config["openai"]["api_key"] = openai_key
     
-    # JAISON configuration
-    jaison_url = input("JAISON Server URL (default: http://localhost:8000): ").strip()
-    if jaison_url:
-        config["jaison"]["url"] = jaison_url
-    
-    jaison_key = input("JAISON API Key (optional): ").strip()
-    if jaison_key:
-        config["jaison"]["api_key"] = jaison_key
-    
     # Audio settings
     print("\nAudio Settings:")
     sample_rate = input("Sample Rate (default: 16000): ").strip()

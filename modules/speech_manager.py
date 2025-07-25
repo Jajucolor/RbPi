@@ -120,11 +120,8 @@ class SpeechManager:
                 while pygame.mixer.music.get_busy():
                     time.sleep(0.1)
                 
-                # Clean up temporary file
-                try:
-                    temp_file.unlink()
-                except Exception as e:
-                    self.logger.warning(f"Failed to delete temp file: {e}")
+                # Clean up temporary file with retry mechanism
+                self._cleanup_temp_file(temp_file)
                 
                 self.logger.info(f"Speech completed: {text[:50]}...")
                 
@@ -256,16 +253,47 @@ class SpeechManager:
             "temp_dir": str(self.temp_dir)
         }
     
+    def _cleanup_temp_file(self, temp_file: Path, max_retries: int = 5):
+        """Clean up temporary file with retry mechanism for Windows compatibility"""
+        for attempt in range(max_retries):
+            try:
+                if temp_file.exists():
+                    temp_file.unlink()
+                    self.logger.debug(f"Successfully deleted temp file: {temp_file.name}")
+                    return
+            except PermissionError as e:
+                if attempt < max_retries - 1:
+                    # Wait a bit longer between retries
+                    wait_time = (attempt + 1) * 0.5
+                    self.logger.debug(f"File {temp_file.name} still in use, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(wait_time)
+                else:
+                    self.logger.warning(f"Failed to delete temp file after {max_retries} attempts: {temp_file.name} - {e}")
+            except Exception as e:
+                self.logger.warning(f"Failed to delete temp file: {temp_file.name} - {e}")
+                break
+    
     def cleanup_temp_files(self):
-        """Clean up temporary audio files"""
+        """Clean up temporary audio files with Windows compatibility"""
         try:
             if self.temp_dir.exists():
+                files_cleaned = 0
+                files_failed = 0
+                
                 for file in self.temp_dir.glob("*.mp3"):
                     try:
-                        file.unlink()
+                        # Use the improved cleanup method
+                        self._cleanup_temp_file(file, max_retries=3)
+                        files_cleaned += 1
                     except Exception as e:
-                        self.logger.warning(f"Failed to delete temp file {file}: {e}")
-                self.logger.info("Temporary files cleaned up")
+                        files_failed += 1
+                        self.logger.warning(f"Failed to delete temp file {file.name}: {e}")
+                
+                if files_cleaned > 0:
+                    self.logger.info(f"Cleaned up {files_cleaned} temporary files")
+                if files_failed > 0:
+                    self.logger.warning(f"Failed to clean up {files_failed} temporary files")
+                    
         except Exception as e:
             self.logger.error(f"Error cleaning up temp files: {str(e)}")
     

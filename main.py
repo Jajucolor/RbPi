@@ -15,7 +15,7 @@ from pathlib import Path
 # Import custom modules
 from modules.camera_manager import CameraManager
 from modules.vision_analyzer import VisionAnalyzer
-from modules.speech_manager import SpeechManager
+from modules.realtime_speech_manager import RealtimeSpeechManager
 from modules.config_manager import ConfigManager
 from modules.button_manager import ButtonManager
 from modules.inta_ai_manager import IntaAIManager
@@ -45,18 +45,25 @@ class AssistiveGlasses:
         self.camera = CameraManager()
         self.vision_analyzer = VisionAnalyzer(self.config.get_openai_key())
         
-        # Initialize speech manager with config settings
+        # Initialize real-time speech manager with config settings
         speech_config = self.config.get_speech_config()
-        self.speech = SpeechManager(
+        self.speech = RealtimeSpeechManager(
             volume=speech_config.get('volume', 0.9),
             language='en',
             slow=False
         )
         
+        # Configure real-time speech settings
+        self.speech.set_realtime_settings(
+            word_delay=0.05,  # Very fast word-by-word
+            sentence_delay=0.2,  # Short pause between sentences
+            chunk_size=2  # Speak 2 words at a time for natural flow
+        )
+        
         self.button_manager = ButtonManager()
         
         # Initialize INTA AI assistant
-        self.inta_ai = IntaAIManager(self.config.get_config())
+        self.inta_ai = IntaAIManager(self.config.config)
         
         # Set up button callbacks
         self.button_manager.set_capture_callback(self.manual_capture)
@@ -64,6 +71,9 @@ class AssistiveGlasses:
         
         # Set up INTA AI response callback
         self.inta_ai._emit_response = self.handle_inta_response
+        
+        # Connect INTA AI to real-time speech
+        self.inta_ai.set_speech_callback(self.speech.speak_realtime)
         
         self.logger.info("Assistive glasses system initialized")
     

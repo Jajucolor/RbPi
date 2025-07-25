@@ -28,7 +28,6 @@ def load_config():
         print("⚠️  config.json not found. Using default configuration.")
         return {
             "openai": {"api_key": ""},
-            "jaison": {"url": "http://localhost:8000", "api_key": ""},
             "inta": {
                 "sample_rate": 16000,
                 "chunk_size": 1024,
@@ -54,7 +53,6 @@ def print_capabilities():
     """Print INTA capabilities"""
     print("🔧 INTA Capabilities:")
     print("• Voice Recognition: Understands natural speech using Whisper")
-    print("• AI Conversation: Natural language processing with JAISON/OpenAI")
     print("• Command Execution: Controls assistive glasses functions")
     print("• Context Awareness: Maintains conversation history")
     print("• Accessibility: Designed for visually impaired users")
@@ -89,7 +87,7 @@ def demo_text_conversation(inta):
         "I can help you take pictures, analyze your environment, read text, and provide navigation assistance.",
         "I'm designed to work with assistive glasses to make your daily activities easier and safer.",
         "I can understand natural language commands and maintain context throughout our conversation.",
-        "My voice recognition uses Whisper AI, and I can process commands through JAISON or OpenAI.",
+        "My voice recognition uses Whisper AI, and I can process commands through  OpenAI.",
         "I'm constantly listening for your voice commands, so you can interact hands-free.",
         "I can help you identify objects, read signs, and describe what's around you.",
         "I'm here to provide companionship and assistance whenever you need me."
@@ -204,21 +202,10 @@ def demo_ai_integration(inta):
     status = inta.get_status()
     
     print("AI Backend Status:")
-    print(f"• JAISON Configured: {status['jaison_configured']}")
     print(f"• OpenAI Configured: {status['openai_configured']}")
     print(f"• Conversation History: {status['conversation_length']} messages")
     print()
-    
-    if status['jaison_configured']:
-        print("✅ JAISON AI backend available")
-        print("JAISON provides enhanced AI capabilities for natural conversation.")
-    else:
-        print("⚠️  JAISON not configured")
-        print("To enable JAISON:")
-        print("1. Clone: https://github.com/limitcantcode/jaison-core")
-        print("2. Follow installation instructions")
-        print("3. Update config.json with JAISON URL and API key")
-        print()
+
     
     if status['openai_configured']:
         print("✅ OpenAI fallback available")
@@ -246,7 +233,6 @@ def main():
     print(f"✅ INTA AI initialized successfully")
     print(f"   Voice Recognition: {'✅' if status['whisper_available'] else '❌'}")
     print(f"   Audio Recording: {'✅' if status['audio_available'] else '❌'}")
-    print(f"   AI Backends: {sum([status['jaison_configured'], status['openai_configured']])}/2")
     print()
     
     # Show capabilities

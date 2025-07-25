@@ -1,8 +1,3 @@
-"""
-INTA AI Manager Module
-AI assistant for assistive glasses using JAISON integration and Whisper for speech recognition
-"""
-
 import logging
 import threading
 import queue
@@ -48,10 +43,6 @@ class IntaAIManager:
         # Conversation state
         self.conversation_history = []
         self.max_history_length = 20
-        
-        # JAISON integration
-        self.jaison_url = config.get('jaison', {}).get('url', 'http://localhost:8000')
-        self.jaison_api_key = config.get('jaison', {}).get('api_key', '')
         
         # OpenAI for fallback
         self.openai_client = None
@@ -165,6 +156,8 @@ class IntaAIManager:
         if not self.audio:
             return None
         
+        DEVICE_INDEX = 1
+        
         try:
             # Open audio stream with proper format for Whisper
             stream = self.audio.open(
@@ -172,7 +165,8 @@ class IntaAIManager:
                 channels=1,
                 rate=self.sample_rate,
                 input=True,
-                frames_per_buffer=self.chunk_size
+                frames_per_buffer=self.chunk_size,
+                input_device_index=DEVICE_INDEX
             )
             
             frames = []
@@ -257,63 +251,81 @@ class IntaAIManager:
     def process_command(self, text: str) -> str:
         """Process user command and generate response"""
         try:
-            # Try JAISON first
-            if self.jaison_url:
-                response = self._query_jaison(text)
-                if response:
-                    return response
+            text_lower = text.lower().strip()
             
-            # Fallback to OpenAI
+            # 🆕 COMMAND RECOGNITION
+            # Vision commands
+            if any(word in text_lower for word in ["capture", "take picture", "snap photo", "capture image"]):
+                return self.execute_function("capture_image")
+            elif any(word in text_lower for word in ["describe", "what do you see", "describe surroundings", "tell me what's around"]):
+                return self.execute_function("describe_surroundings")
+            elif any(word in text_lower for word in ["navigate", "help me walk", "guide me", "navigate safely"]):
+                return self.execute_function("navigate")
+            elif any(word in text_lower for word in ["read", "what does it say", "read text", "read that"]):
+                return self.execute_function("read_text")
+            elif any(word in text_lower for word in ["identify", "what is that", "identify objects"]):
+                return self.execute_function("identify_objects")
+            
+            # Time and date commands
+            elif any(word in text_lower for word in ["time", "what time", "current time", "time now"]):
+                return self.execute_function("time")
+            elif any(word in text_lower for word in ["date", "what day", "what's the date", "today's date"]):
+                return self.execute_function("date")
+            
+            # Fun commands
+            elif any(word in text_lower for word in ["joke", "tell me a joke", "make me laugh", "funny joke"]):
+                return self.execute_function("joke")
+            
+            # System commands
+            elif any(word in text_lower for word in ["status", "system status", "how are you"]):
+                return self.execute_function("status")
+            elif any(word in text_lower for word in ["help", "what can you do", "commands"]):
+                return self.execute_function("help")
+            
+            # Audio commands
+            elif any(word in text_lower for word in ["volume up", "louder", "increase volume", "turn up"]):
+                return self.execute_function("volume_up")
+            elif any(word in text_lower for word in ["volume down", "quieter", "decrease volume", "turn down"]):
+                return self.execute_function("volume_down")
+            elif any(word in text_lower for word in ["mute", "silence"]):
+                return self.execute_function("mute")
+            elif any(word in text_lower for word in ["unmute", "unmute audio"]):
+                return self.execute_function("unmute")
+            
+            # Emergency commands
+            elif any(word in text_lower for word in ["emergency", "urgent", "help me", "sos"]):
+                return self.execute_function("emergency")
+            
+            # Weather commands
+            elif any(word in text_lower for word in ["weather", "what's the weather", "weather forecast", "is it raining"]):
+                return self.execute_function("weather")
+            
+            # Distance and obstacle commands
+            elif any(word in text_lower for word in ["distance", "how far", "measure distance"]):
+                return self.execute_function("distance")
+            elif any(word in text_lower for word in ["obstacles", "obstacle", "scan for obstacles"]):
+                return self.execute_function("obstacles")
+            
+            # Fallback to OpenAI for natural conversation
             if self.openai_client:
                 response = self._query_openai(text)
                 if response:
                     return response
             
             # Default response
-            return "I'm sorry, I couldn't process your request. Please try again."
+            return "I'm sorry, I couldn't process your request. Try saying 'help' for available commands."
             
         except Exception as e:
             self.logger.error(f"Error processing command: {str(e)}")
             return "I encountered an error processing your request."
-    
-    def _query_jaison(self, text: str) -> Optional[str]:
-        """Query JAISON AI system"""
-        try:
-            headers = {
-                'Content-Type': 'application/json',
-                'Authorization': f'Bearer {self.jaison_api_key}' if self.jaison_api_key else ''
-            }
-            
-            payload = {
-                'message': text,
-                'context': self._get_conversation_context(),
-                'persona': 'INTA',
-                'stream': False
-            }
-            
-            response = requests.post(
-                f"{self.jaison_url}/api/chat",
-                headers=headers,
-                json=payload,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                return data.get('response', '')
-            
-        except Exception as e:
-            self.logger.error(f"Error querying JAISON: {str(e)}")
-        
-        return None
-    
+ 
     def _query_openai(self, text: str) -> Optional[str]:
         """Query OpenAI as fallback"""
         try:
             messages = [
                 {
                     "role": "system",
-                    "content": """You are INTA, an AI assistant for visually impaired users wearing assistive glasses. 
+                    "content": """You are Inta, an AI assistant for visually impaired users wearing assistive glasses. 
                     You help users understand their surroundings, navigate safely, and provide companionship. 
                     Be helpful, friendly, and concise in your responses."""
                 }
@@ -356,18 +368,7 @@ class IntaAIManager:
             self.logger.error(f"Error querying OpenAI: {str(e)}")
         
         return None
-    
-    def _get_conversation_context(self) -> str:
-        """Get conversation context for JAISON"""
-        if not self.conversation_history:
-            return "This is the start of a conversation with INTA, an AI assistant for visually impaired users."
-        
-        context = "Recent conversation:\n"
-        for msg in self.conversation_history[-5:]:  # Last 5 messages
-            context += f"{msg['role']}: {msg['content']}\n"
-        
-        return context
-    
+
     def _add_to_history(self, role: str, content: str):
         """Add message to conversation history"""
         self.conversation_history.append({
@@ -384,10 +385,19 @@ class IntaAIManager:
         """Emit response event for other components to handle"""
         # This can be extended to emit events to other parts of the system
         self.logger.info(f"INTA Response: {response}")
+        
+        # Emit to speech system for real-time speaking
+        if hasattr(self, '_speech_callback') and self._speech_callback:
+            self._speech_callback(response)
+    
+    def set_speech_callback(self, speech_callback):
+        """Set callback for speech output"""
+        self._speech_callback = speech_callback
     
     def execute_function(self, function_name: str, params: Dict[str, Any] = None) -> str:
         """Execute specific functions based on commands"""
         try:
+            # Basic vision commands
             if function_name == "capture_image":
                 return "I'll capture an image of your surroundings."
             elif function_name == "describe_surroundings":
@@ -398,8 +408,61 @@ class IntaAIManager:
                 return "I'll read any text I can see."
             elif function_name == "identify_objects":
                 return "I'll identify objects in your environment."
+            
+            # 🆕 Time and date commands
+            elif function_name == "time":
+                import time
+                return f"The current time is {time.strftime('%H:%M')}."
+            elif function_name == "date":
+                import time
+                return f"Today is {time.strftime('%A, %B %d, %Y')}."
+            
+            # 🆕 Fun commands
+            elif function_name == "joke":
+                jokes = [
+                    "Why don't scientists trust atoms? Because they make up everything!",
+                    "What do you call a fake noodle? An impasta!",
+                    "Why did the scarecrow win an award? He was outstanding in his field!",
+                    "I told my wife she was drawing her eyebrows too high. She looked surprised!",
+                    "Why don't eggs tell jokes? They'd crack each other up!"
+                ]
+                import random
+                return random.choice(jokes)
+            
+            # 🆕 System commands
+            elif function_name == "status":
+                return "I'm running normally. All systems are operational."
+            elif function_name == "help":
+                return "I can help you with: taking pictures, describing surroundings, navigation, reading text, telling time, jokes, and more. Just ask!"
+            
+            # 🆕 Audio commands
+            elif function_name == "volume_up":
+                return "I'll increase the volume."
+            elif function_name == "volume_down":
+                return "I'll decrease the volume."
+            elif function_name == "mute":
+                return "I'll mute the audio."
+            elif function_name == "unmute":
+                return "I'll unmute the audio."
+            
+            # 🆕 Emergency commands
+            elif function_name == "emergency":
+                return "EMERGENCY MODE ACTIVATED! I'm here to help. What do you need?"
+            elif function_name == "sos":
+                return "SOS RECEIVED! Emergency assistance mode activated. I'm here to help you."
+            
+            # 🆕 Weather placeholder (you can add real API later)
+            elif function_name == "weather":
+                return "I'll check the weather for your location. (Weather API not yet connected)"
+            
+            # 🆕 Distance and obstacle detection
+            elif function_name == "distance":
+                return "I'll measure the distance to nearby objects."
+            elif function_name == "obstacles":
+                return "I'll scan for obstacles in your path."
+            
             else:
-                return f"I don't recognize the function '{function_name}'."
+                return f"I don't recognize the function '{function_name}'. Try saying 'help' for available commands."
                 
         except Exception as e:
             self.logger.error(f"Error executing function {function_name}: {str(e)}")
@@ -411,7 +474,6 @@ class IntaAIManager:
             "listening": self.listening,
             "whisper_available": WHISPER_AVAILABLE,
             "audio_available": AUDIO_AVAILABLE,
-            "jaison_configured": bool(self.jaison_url),
             "openai_configured": bool(self.openai_client),
             "conversation_length": len(self.conversation_history)
         }

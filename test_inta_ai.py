@@ -38,10 +38,6 @@ def load_config():
                 "max_tokens": 150,
                 "temperature": 0.7
             },
-            "jaison": {
-                "url": "http://localhost:8000",
-                "api_key": ""
-            },
             "inta": {
                 "sample_rate": 16000,
                 "chunk_size": 1024,
@@ -79,10 +75,6 @@ def test_inta_ai():
     if not status["audio_available"]:
         print("\n⚠️  Warning: PyAudio not available. Audio recording will be disabled.")
         print("   Install with: pip install pyaudio")
-    
-    if not status["jaison_configured"] and not status["openai_configured"]:
-        print("\n⚠️  Warning: No AI backend configured.")
-        print("   Configure OpenAI API key or JAISON server in config.json")
     
     print("\n" + "=" * 60)
     print("Test Options:")

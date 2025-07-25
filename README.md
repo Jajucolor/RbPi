@@ -20,7 +20,6 @@ The INTA (Intelligent Navigation and Text Analysis) AI assistant provides:
 - **Natural Voice Interaction**: Speak naturally to control the system
 - **Command Understanding**: Understands complex commands and questions
 - **Context Awareness**: Maintains conversation history for better responses
-- **Multiple AI Backends**: Uses JAISON for primary AI and OpenAI as fallback
 
 ### Voice Commands Examples
 - "Hello INTA, how are you?"
@@ -72,7 +71,6 @@ The INTA (Intelligent Navigation and Text Analysis) AI assistant provides:
 
 ### INTA AI Manager (`modules/inta_ai_manager.py`)
 - Provides intelligent voice assistant capabilities
-- Integrates with JAISON AI system and OpenAI
 - Handles speech recognition using Whisper
 - Manages conversation context and command execution
 
@@ -123,10 +121,6 @@ The system uses a JSON configuration file with the following sections:
     "model": "gpt-4o-mini",
     "max_tokens": 300,
     "temperature": 0.3
-  },
-  "jaison": {
-    "url": "http://localhost:8000",
-    "api_key": "your-jaison-api-key-here"
   },
   "inta": {
     "sample_rate": 16000,
@@ -195,7 +189,7 @@ Microphone → PyAudio → 16-bit PCM → WAV Header → Whisper → Text
 
 ### AI Processing Pipeline
 ```
-Text Input → JAISON/OpenAI → Response → Speech Synthesis → Audio Output
+Text Input → OpenAI → Response → Speech Synthesis → Audio Output
 ```
 
 ### Command Execution Flow
@@ -219,27 +213,6 @@ Voice Command → Speech Recognition → Intent Detection → Function Execution
 - **`large`**: Best accuracy, slowest (1550MB)
 
 ## 🤖 AI Integration
-
-### JAISON Integration (Primary)
-For enhanced AI capabilities, set up JAISON:
-
-1. **Clone JAISON Core:**
-```bash
-git clone https://github.com/limitcantcode/jaison-core.git
-cd jaison-core
-```
-
-2. **Follow JAISON installation instructions:**
-```bash
-conda create -n jaison-core python=3.12 pip=24.0 -y
-conda activate jaison-core
-pip install .
-```
-
-3. **Start JAISON server:**
-```bash
-python ./src/main.py --config=example
-```
 
 ### OpenAI Fallback
 - Backup AI processing using OpenAI's GPT models
@@ -295,7 +268,6 @@ python ./src/main.py --config=example
 - `Pillow>=9.0.0` - Image processing
 
 ### Optional Dependencies
-- JAISON Core server for enhanced AI capabilities
 - FFmpeg for audio processing
 
 ## 🏗️ Architecture
@@ -357,11 +329,6 @@ python test_audio.py
 # Test OpenAI integration
 python test_openai_integration.py
 ```
-
-**6. JAISON Connection Issues**
-- Verify JAISON server is running: `curl http://localhost:8000/health`
-- Check API key configuration
-- Ensure network connectivity
 
 ### Performance Optimization
 
@@ -486,8 +453,7 @@ For support and troubleshooting:
 4. Verify hardware connections
 
 ## 🙏 Acknowledgments
-
-- [Project J.A.I.son](https://github.com/limitcantcode/jaison-core) for AI integration
+integration
 - [OpenAI Whisper](https://github.com/openai/whisper) for speech recognition
 - [PyAudio](https://people.csail.mit.edu/hubert/pyaudio/) for audio processing
 
