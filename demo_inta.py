@@ -29,12 +29,14 @@ def load_config():
         return {
             "openai": {"api_key": ""},
             "inta": {
-                "sample_rate": 16000,
-                "chunk_size": 1024,
-                "record_seconds": 5,
-                "silence_threshold": 0.01,
-                "silence_duration": 1.0,
-                "whisper_model": "base"
+                "sample_rate": 8000,
+                "chunk_size": 512,
+                "vad_aggressiveness": 2,
+                "speech_frames_threshold": 3,
+                "silence_frames_threshold": 10,
+                "realtime_buffer_size": 4096,
+                "max_audio_length": 10.0,
+                "whisper_model": "tiny"
             }
         }
 
@@ -87,7 +89,7 @@ def demo_text_conversation(inta):
         "I can help you take pictures, analyze your environment, read text, and provide navigation assistance.",
         "I'm designed to work with assistive glasses to make your daily activities easier and safer.",
         "I can understand natural language commands and maintain context throughout our conversation.",
-        "My voice recognition uses Whisper AI, and I can process commands through  OpenAI.",
+        "My voice recognition uses Whisper AI, and I can process commands through OpenAI.",
         "I'm constantly listening for your voice commands, so you can interact hands-free.",
         "I can help you identify objects, read signs, and describe what's around you.",
         "I'm here to provide companionship and assistance whenever you need me."
@@ -208,8 +210,8 @@ def demo_ai_integration(inta):
 
     
     if status['openai_configured']:
-        print("✅ OpenAI fallback available")
-        print("OpenAI provides backup AI processing capabilities.")
+        print("✅ OpenAI AI backend available")
+        print("OpenAI provides AI processing capabilities for natural conversation.")
     else:
         print("⚠️  OpenAI not configured")
         print("To enable OpenAI:")
@@ -285,7 +287,7 @@ def main():
     print("• Run 'python test_inta_ai.py' for full testing")
     print("• Run 'python main.py' to use with assistive glasses")
     print("• See README_INTA.md for detailed documentation")
-    print("• Configure AI backends for enhanced capabilities")
+    print("• Configure OpenAI for enhanced capabilities")
     print()
     print("Happy exploring! 🚀")
 

@@ -45,6 +45,7 @@ This comprehensive guide will help you set up the assistive glasses system with 
    sudo apt install -y python3-pygame alsa-utils
    sudo apt install -y mpg321 mpg123
    sudo apt install -y portaudio19-dev python3-pyaudio ffmpeg
+   sudo apt install -y python3-alsaaudio
    ```
 
 ### Step 2: Install Camera and GPIO Libraries
@@ -147,10 +148,6 @@ cp config.example.json config.json
     "max_tokens": 300,
     "temperature": 0.3
   },
-  "jaison": {
-    "url": "http://localhost:8000",
-    "api_key": "your-jaison-api-key-here"
-  },
   "inta": {
     "sample_rate": 16000,
     "chunk_size": 1024,
@@ -194,27 +191,6 @@ cp config.example.json config.json
 - Set environment variable: `export OPENAI_API_KEY="your-key"`
 - Or create a `.openai_key` file with your key
 
-#### JAISON Setup (Optional)
-For enhanced AI capabilities:
-
-1. **Clone JAISON Core:**
-```bash
-git clone https://github.com/limitcantcode/jaison-core.git
-cd jaison-core
-```
-
-2. **Follow JAISON installation instructions:**
-```bash
-conda create -n jaison-core python=3.12 pip=24.0 -y
-conda activate jaison-core
-pip install .
-```
-
-3. **Start JAISON server:**
-```bash
-python ./src/main.py --config=example
-```
-
 ## 🧪 Testing the System
 
 ### Step 1: Test Individual Components
@@ -236,22 +212,27 @@ python ./src/main.py --config=example
 
 ### Step 2: Test INTA AI Components
 
-1. **Test audio system**
+1. **Test ALSA-optimized audio system**
+   ```bash
+   python test_alsa_inta.py
+   ```
+
+2. **Test audio system (fallback)**
    ```bash
    python test_audio.py
    ```
 
-2. **Test OpenAI integration**
+3. **Test OpenAI integration**
    ```bash
    python test_openai_integration.py
    ```
 
-3. **Test INTA AI**
+4. **Test INTA AI**
    ```bash
    python test_inta_ai.py
    ```
 
-4. **Interactive demo**
+5. **Interactive demo**
    ```bash
    python demo_inta.py
    ```
@@ -426,11 +407,6 @@ Adjust these for your microphone and environment:
    python test_openai_integration.py
    ```
 
-10. **JAISON Connection Issues**
-    - Verify JAISON server is running: `curl http://localhost:8000/health`
-    - Check API key configuration
-    - Ensure network connectivity
-
 ### Debug Mode
 
 Run with debug logging:
@@ -496,7 +472,6 @@ python3 main.py --debug
 ### Documentation
 - [Raspberry Pi Documentation](https://www.raspberrypi.org/documentation/)
 - [OpenAI API Documentation](https://platform.openai.com/docs)
-- [Project J.A.I.son Documentation](https://github.com/limitcantcode/jaison-core)
 - [Whisper Documentation](https://github.com/openai/whisper)
 
 ### Community Support

@@ -4,6 +4,17 @@
       "max_tokens": 300,
       "temperature": 0.3
   },
+
+  "inta": {
+      "sample_rate": 8000,
+      "chunk_size": 512,
+      "vad_aggressiveness": 2,
+      "speech_frames_threshold": 3,
+      "silence_frames_threshold": 10,
+      "realtime_buffer_size": 4096,
+      "max_audio_length": 10.0,
+      "whisper_model": "tiny"
+  },
   "camera": {
       "width": 1920,
       "height": 1080,
@@ -33,19 +44,5 @@
       "led_pin": 24,
       "shutdown_pin": 3,
       "debounce_time": 0.2
-  },
-  "inta": {
-      "enabled": true,
-      "voice_interaction": true,
-      "command_recognition": true,
-      "conversation_history_length": 10,
-      "whisper_model": "tiny",
-      "audio_sample_rate": 8000,
-      "silence_threshold": 0.01,
-      "silence_duration": 0.2,
-      "listen_while_speaking": true,
-      "interrupt_speech": true,
-      "continuous_listening": true,
-      "background_listening": true
   }
 } 

@@ -5,7 +5,7 @@ A Raspberry Pi-based assistive device that uses computer vision and AI to help v
 ## 🎯 Features
 
 - **Real-time Environment Analysis**: Captures and analyzes surroundings using OpenAI's GPT-4 Vision API
-- **AI Assistant (INTA)**: Intelligent voice assistant with natural language processing and command understanding
+- **AI Assistant (INTA)**: Intelligent voice assistant with OpenAI-powered natural language processing and command understanding
 - **Voice Recognition**: Continuous listening using OpenAI Whisper for hands-free operation
 - **Audio Feedback**: Converts visual information to speech using text-to-speech technology
 - **Simple Controls**: Easy-to-use button interface for capturing and analyzing environments
@@ -70,7 +70,7 @@ The INTA (Intelligent Navigation and Text Analysis) AI assistant provides:
 - Supports simulation mode
 
 ### INTA AI Manager (`modules/inta_ai_manager.py`)
-- Provides intelligent voice assistant capabilities
+- Provides intelligent voice assistant capabilities powered by OpenAI
 - Handles speech recognition using Whisper
 - Manages conversation context and command execution
 
@@ -182,7 +182,21 @@ python demo_inta.py
 
 ## 🔧 Technical Implementation
 
-### Audio Processing Pipeline
+### Low-Latency Audio Processing (ALSA Optimized)
+```
+Microphone → ALSA Direct → 16-bit PCM → VAD → Whisper → OpenAI → Response
+```
+
+**Key Optimizations for Raspberry Pi:**
+- **ALSA Direct Access**: Bypasses PyAudio for lower latency
+- **WebRTC VAD**: Accurate voice activity detection
+- **8kHz Sample Rate**: Optimized for Pi's audio hardware
+- **512-byte Chunks**: Smaller buffers for real-time processing
+- **Tiny Whisper Model**: Faster inference on limited hardware
+- **Continuous Streaming**: No gaps in audio capture
+- **OpenAI Integration**: Natural language processing and conversation
+
+### Fallback Audio Processing
 ```
 Microphone → PyAudio → 16-bit PCM → WAV Header → Whisper → Text
 ```

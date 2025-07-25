@@ -39,11 +39,14 @@ def load_config():
                 "temperature": 0.7
             },
             "inta": {
-                "sample_rate": 16000,
-                "chunk_size": 1024,
-                "record_seconds": 5,
-                "silence_threshold": 0.01,
-                "silence_duration": 1.0
+                "sample_rate": 8000,
+                "chunk_size": 512,
+                "vad_aggressiveness": 2,
+                "speech_frames_threshold": 3,
+                "silence_frames_threshold": 10,
+                "realtime_buffer_size": 4096,
+                "max_audio_length": 10.0,
+                "whisper_model": "tiny"
             }
         }
 
