@@ -14,7 +14,8 @@
       "phrase_threshold": 0.3,
       "dynamic_energy_threshold": true,
       "non_speaking_duration": 0.5,
-      "phrase_time_limit": null,
+        "phrase_time_limit": null,
+        "microphone_volume": 0.8,
       "whisper_model": "tiny"
   },
   

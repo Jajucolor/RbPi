@@ -61,6 +61,12 @@ class IntaAIManager:
         self.chunk_size = config.get('inta', {}).get('chunk_size', 1024)
         self.channels = 1
         
+        # Setup PipeWire system
+        self._setup_pipewire_system()
+        
+        # Configure microphone volume
+        self._configure_microphone_volume()
+        
         # Voice Activity Detection settings
         self.vad_aggressiveness = config.get('inta', {}).get('vad_aggressiveness', 2)
         self.speech_frames_threshold = config.get('inta', {}).get('speech_frames_threshold', 3)
@@ -108,14 +114,14 @@ class IntaAIManager:
         self.logger.info("INTA AI Manager initialized")
     
     def _initialize_speech_recognition(self):
-        """Initialize speech recognition with direct hardware access"""
+        """Initialize speech recognition with PipeWire"""
         if not SPEECH_RECOGNITION_AVAILABLE:
             self.logger.error("speech_recognition not available - audio recording disabled")
             return False
         
         try:
-            # Configure ALSA for direct hardware access first
-            self._configure_alsa_direct()
+            # Configure PipeWire and disable ALSA/JACK
+            self._configure_pipewire()
             
             # Initialize recognizer
             self.recognizer = sr.Recognizer()
@@ -151,15 +157,15 @@ class IntaAIManager:
             return False
     
     def _find_usb_microphone(self):
-        """Find and configure USB microphone with direct hardware access"""
+        """Find and configure USB microphone with PipeWire"""
         try:
-            # List all microphones
+            # List all microphones through PipeWire
             mics = sr.Microphone.list_microphone_names()
-            self.logger.info(f"Available microphones: {mics}")
+            self.logger.info(f"Available microphones (PipeWire): {mics}")
             
-            # Look for USB microphone
+            # Look for USB microphone (MUSIC-BOOST USB Microphone)
             for i, mic_name in enumerate(mics):
-                if 'usb' in mic_name.lower() or 'microphone' in mic_name.lower():
+                if 'usb' in mic_name.lower() or 'microphone' in mic_name.lower() or 'music-boost' in mic_name.lower():
                     self.logger.info(f"Found USB microphone: {mic_name} (index {i})")
                     
                     # Create microphone with specific device index
@@ -169,32 +175,32 @@ class IntaAIManager:
                     try:
                         with mic as source:
                             self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
-                        self.logger.info(f"USB microphone {i} working correctly")
+                        self.logger.info(f"USB microphone {i} working correctly with PipeWire")
                         return mic
                     except Exception as e:
                         self.logger.warning(f"USB microphone {i} failed test: {e}")
                         continue
             
-            # If no USB mic found, try direct hardware access to card 2
-            self.logger.info("No USB microphone found, trying direct hardware access to card 2")
+            # If no USB mic found, try default microphone
+            self.logger.info("No USB microphone found, trying default microphone")
             
             try:
-                # Try direct hardware access to USB mic on card 2
-                mic = sr.Microphone(device_index=2)  # Card 2 from arecord -l
+                # Try default microphone
+                mic = sr.Microphone()
                 with mic as source:
                     self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
-                self.logger.info("Direct hardware access to card 2 successful")
+                self.logger.info("Default microphone working correctly with PipeWire")
                 return mic
             except Exception as e:
-                self.logger.warning(f"Direct access to card 2 failed: {e}")
+                self.logger.warning(f"Default microphone failed: {e}")
             
             # Try different device configurations
-            for device_index in range(10):  # Try first 10 devices
+            for device_index in range(5):  # Try first 5 devices
                 try:
                     mic = sr.Microphone(device_index=device_index)
                     with mic as source:
                         self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
-                    self.logger.info(f"Direct hardware access successful with device {device_index}")
+                    self.logger.info(f"Microphone {device_index} working correctly with PipeWire")
                     return mic
                 except Exception as e:
                     continue
@@ -205,41 +211,114 @@ class IntaAIManager:
             self.logger.error(f"Error finding USB microphone: {e}")
             return None
     
-    def _configure_alsa_direct(self):
-        """Configure ALSA for direct hardware access"""
+    def _configure_pipewire(self):
+        """Configure PipeWire for direct access"""
         try:
-            # Set ALSA environment variables for direct access
-            os.environ['ALSA_PCM_CARD'] = '2'
-            os.environ['ALSA_PCM_DEVICE'] = '0'
-            os.environ['ALSA_CARD'] = '2'
+            # Disable ALSA completely
+            os.environ['ALSA_PCM_CARD'] = ''
+            os.environ['ALSA_PCM_DEVICE'] = ''
+            os.environ['ALSA_CARD'] = ''
             
-            # Create minimal ALSA config in memory
-            import tempfile
-            config_content = """
-pcm.!default {
-    type hw
-    card 2
-    device 0
-}
-ctl.!default {
-    type hw
-    card 2
-}
-"""
-            # Write temporary ALSA config
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.conf', delete=False) as f:
-                f.write(config_content)
-                temp_config = f.name
+            # Force PipeWire
+            os.environ['PIPEWIRE_RUNTIME_DIR'] = '/tmp/pipewire-0'
+            os.environ['PIPEWIRE_REMOTE'] = 'pipewire-0'
             
-            # Set ALSA config file
-            os.environ['ALSA_CONFIG_FILE'] = temp_config
+            # Disable JACK
+            os.environ['JACK_NO_AUDIO_RESERVATION'] = '1'
+            os.environ['JACK_PROMISCUOUS_SERVER'] = ''
             
-            self.logger.info("ALSA configured for direct hardware access to card 2")
+            # Suppress ALSA and JACK error messages
+            os.environ['ALSA_PCM_CARD'] = ''
+            os.environ['ALSA_PCM_DEVICE'] = ''
+            os.environ['ALSA_CARD'] = ''
+            os.environ['JACK_NO_AUDIO_RESERVATION'] = '1'
+            os.environ['JACK_PROMISCUOUS_SERVER'] = ''
+            
+            # Redirect stderr to suppress ALSA/JACK warnings
+            import sys
+            import os
+            
+            # Create a null device for stderr
+            null_fd = os.open(os.devnull, os.O_WRONLY)
+            old_stderr = os.dup(2)
+            os.dup2(null_fd, 2)
+            os.close(null_fd)
+            
+            # Kill any existing JACK processes
+            try:
+                import subprocess
+                subprocess.run(['pkill', '-f', 'jack'], capture_output=True)
+                subprocess.run(['pkill', '-f', 'jackd'], capture_output=True)
+            except:
+                pass
+            
+            # Ensure PipeWire is running
+            try:
+                import subprocess
+                result = subprocess.run(['pw-cli', 'info'], capture_output=True)
+                if result.returncode != 0:
+                    subprocess.run(['pipewire'], capture_output=True)
+                    time.sleep(2)
+            except:
+                pass
+            
+            # Restore stderr
+            os.dup2(old_stderr, 2)
+            os.close(old_stderr)
+            
+            self.logger.info("PipeWire configured, ALSA and JACK disabled")
             return True
             
         except Exception as e:
-            self.logger.error(f"Failed to configure ALSA: {e}")
+            self.logger.error(f"Failed to configure PipeWire: {e}")
             return False
+    
+    def _setup_pipewire_system(self):
+        """Setup PipeWire system and kill conflicting services"""
+        try:
+            import subprocess
+            
+            # Kill JACK processes
+            subprocess.run(['pkill', '-f', 'jack'], capture_output=True)
+            subprocess.run(['pkill', '-f', 'jackd'], capture_output=True)
+            
+            # Ensure PipeWire is running
+            result = subprocess.run(['pw-cli', 'info'], capture_output=True)
+            if result.returncode != 0:
+                subprocess.run(['pipewire'], capture_output=True)
+                time.sleep(2)
+            
+            self.logger.info("PipeWire system setup complete")
+            
+        except Exception as e:
+            self.logger.warning(f"PipeWire system setup failed: {e}")
+    
+    def _configure_microphone_volume(self):
+        """Configure microphone volume"""
+        try:
+            import subprocess
+            
+            # Get microphone volume from config (0.0 to 1.0)
+            mic_volume = self.config.get('inta', {}).get('microphone_volume', 0.8)
+            
+            # Set volume using pactl
+            mic_name = "alsa_input.usb-MUSIC-BOOST_USB_Microphone_MB-306-00.mono-fallback.2"
+            
+            # Convert 0.0-1.0 to 0-65536
+            volume_int = int(mic_volume * 65536)
+            
+            # Set volume
+            result = subprocess.run([
+                'pactl', 'set-source-volume', mic_name, str(volume_int)
+            ], capture_output=True)
+            
+            if result.returncode == 0:
+                self.logger.info(f"Microphone volume set to {mic_volume * 100:.0f}%")
+            else:
+                self.logger.warning(f"Failed to set microphone volume: {result.stderr.decode()}")
+                
+        except Exception as e:
+            self.logger.warning(f"Failed to configure microphone volume: {e}")
     
     def _get_microphone_info(self) -> str:
         """Get information about available microphones"""
