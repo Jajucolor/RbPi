@@ -30,25 +30,6 @@ def check_python_version():
     print(f"✅ Python {version.major}.{version.minor}.{version.micro} - OK")
     return True
 
-def install_dependencies():
-    """Install required dependencies"""
-    print("\nInstalling Python dependencies...")
-    
-    try:
-        # Install basic requirements
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
-        print("✅ Python dependencies installed successfully")
-        
-        # Install additional speech recognition dependencies
-        print("Installing speech recognition dependencies...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "speechrecognition>=3.10.0"])
-        print("✅ Speech recognition dependencies installed successfully")
-        
-        return True
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Failed to install dependencies: {e}")
-        return False
-
 def install_system_dependencies():
     """Install system-specific dependencies"""
     system = platform.system().lower()
@@ -62,11 +43,19 @@ def install_system_dependencies():
                 os_info = f.read().lower()
             
             if "ubuntu" in os_info or "debian" in os_info or "raspbian" in os_info:
-                print("Installing audio dependencies...")
+                print("Installing audio and math libraries...")
                 subprocess.check_call(["sudo", "apt", "update"])
+                
+                # Install audio dependencies
                 subprocess.check_call(["sudo", "apt", "install", "-y", 
                                      "portaudio19-dev", "python3-pyaudio", "ffmpeg",
                                      "flac", "alsa-utils"])
+                
+                # Install BLAS and math libraries for NumPy
+                print("Installing BLAS and math libraries...")
+                subprocess.check_call(["sudo", "apt", "install", "-y",
+                                     "libopenblas-dev", "liblapack-dev", "libatlas-base-dev",
+                                     "gfortran", "build-essential", "pkg-config"])
                 
                 # Add user to audio group
                 print("Setting up audio permissions...")
@@ -79,10 +68,11 @@ def install_system_dependencies():
             elif "fedora" in os_info or "rhel" in os_info:
                 subprocess.check_call(["sudo", "dnf", "install", "-y", 
                                      "portaudio-devel", "python3-pyaudio", "ffmpeg",
-                                     "flac", "alsa-utils"])
+                                     "flac", "alsa-utils", "openblas-devel", "lapack-devel"])
             else:
-                print("⚠️  Please install audio dependencies manually:")
+                print("⚠️  Please install dependencies manually:")
                 print("   sudo apt install python3-pyaudio alsa-utils portaudio19-dev ffmpeg flac")
+                print("   sudo apt install libopenblas-dev liblapack-dev gfortran build-essential")
                 return False
             
             print("✅ System dependencies installed successfully")
@@ -94,7 +84,7 @@ def install_system_dependencies():
     
     elif system == "darwin":  # macOS
         try:
-            subprocess.check_call(["brew", "install", "portaudio", "ffmpeg", "flac"])
+            subprocess.check_call(["brew", "install", "portaudio", "ffmpeg", "flac", "openblas"])
             print("✅ System dependencies installed successfully")
             return True
         except subprocess.CalledProcessError as e:
@@ -110,6 +100,37 @@ def install_system_dependencies():
     
     else:
         print(f"⚠️  Unsupported system: {system}")
+        return False
+
+def install_dependencies():
+    """Install required dependencies"""
+    print("\nInstalling Python dependencies...")
+    
+    try:
+        # First, try to install NumPy with BLAS support
+        print("Installing NumPy with BLAS support...")
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "pip"])
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "numpy>=1.21.0"])
+            print("✅ NumPy installed successfully")
+        except subprocess.CalledProcessError:
+            print("⚠️  NumPy installation failed, trying without BLAS...")
+            # Try installing NumPy without BLAS
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "numpy>=1.21.0", "--no-build-isolation"])
+        
+        # Install basic requirements
+        print("Installing other Python dependencies...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
+        print("✅ Python dependencies installed successfully")
+        
+        # Install additional speech recognition dependencies
+        print("Installing speech recognition dependencies...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "speechrecognition>=3.10.0"])
+        print("✅ Speech recognition dependencies installed successfully")
+        
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Failed to install dependencies: {e}")
         return False
 
 def create_config():
@@ -169,11 +190,11 @@ def test_installation():
     print("\nTesting installation...")
     
     tests = [
+        ("NumPy", "import numpy; print(f'NumPy version: {numpy.__version__}')"),
         ("Speech Recognition", "import speech_recognition as sr"),
         ("Whisper", "import whisper; whisper.load_model('tiny')"),
         ("PyAudio", "import pyaudio"),
         ("OpenAI", "import openai"),
-        ("NumPy", "import numpy"),
         ("Requests", "import requests"),
         ("gTTS", "from gtts import gTTS"),
         ("Pygame", "import pygame")
@@ -187,7 +208,7 @@ def test_installation():
             print(f"✅ {name} - OK")
         except Exception as e:
             print(f"❌ {name} - Failed: {e}")
-            if name in ["Speech Recognition", "PyAudio"]:
+            if name in ["Speech Recognition", "PyAudio", "NumPy"]:
                 all_passed = False
             else:
                 print(f"   (This is optional for {name})")
@@ -287,14 +308,14 @@ def main():
     if not check_python_version():
         sys.exit(1)
     
+    # Install system dependencies first
+    if not install_system_dependencies():
+        print("\n⚠️  System dependencies installation failed, but continuing...")
+    
     # Install dependencies
     if not install_dependencies():
         print("\n❌ Setup failed at dependency installation")
         sys.exit(1)
-    
-    # Install system dependencies
-    if not install_system_dependencies():
-        print("\n⚠️  System dependencies installation failed, but continuing...")
     
     # Create configuration
     if not create_config():
