@@ -108,12 +108,15 @@ class IntaAIManager:
         self.logger.info("INTA AI Manager initialized")
     
     def _initialize_speech_recognition(self):
-        """Initialize speech recognition with microphone detection"""
+        """Initialize speech recognition with direct hardware access"""
         if not SPEECH_RECOGNITION_AVAILABLE:
             self.logger.error("speech_recognition not available - audio recording disabled")
             return False
         
         try:
+            # Configure ALSA for direct hardware access first
+            self._configure_alsa_direct()
+            
             # Initialize recognizer
             self.recognizer = sr.Recognizer()
             
@@ -125,8 +128,12 @@ class IntaAIManager:
             self.recognizer.phrase_threshold = 0.3  # Minimum seconds of speaking audio before we consider the speaking audio a phrase
             self.recognizer.phrase_time_limit = None  # Maximum number of seconds that a phrase can be recorded for
             
-            # Initialize microphone
-            self.microphone = sr.Microphone()
+            # Try to find USB microphone with direct hardware access
+            self.microphone = self._find_usb_microphone()
+            
+            if not self.microphone:
+                # Fallback to default microphone
+                self.microphone = sr.Microphone()
             
             # Adjust for ambient noise
             with self.microphone as source:
@@ -141,6 +148,97 @@ class IntaAIManager:
             
         except Exception as e:
             self.logger.error(f"Failed to initialize speech recognition: {str(e)}")
+            return False
+    
+    def _find_usb_microphone(self):
+        """Find and configure USB microphone with direct hardware access"""
+        try:
+            # List all microphones
+            mics = sr.Microphone.list_microphone_names()
+            self.logger.info(f"Available microphones: {mics}")
+            
+            # Look for USB microphone
+            for i, mic_name in enumerate(mics):
+                if 'usb' in mic_name.lower() or 'microphone' in mic_name.lower():
+                    self.logger.info(f"Found USB microphone: {mic_name} (index {i})")
+                    
+                    # Create microphone with specific device index
+                    mic = sr.Microphone(device_index=i)
+                    
+                    # Test if it works
+                    try:
+                        with mic as source:
+                            self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
+                        self.logger.info(f"USB microphone {i} working correctly")
+                        return mic
+                    except Exception as e:
+                        self.logger.warning(f"USB microphone {i} failed test: {e}")
+                        continue
+            
+            # If no USB mic found, try direct hardware access to card 2
+            self.logger.info("No USB microphone found, trying direct hardware access to card 2")
+            
+            try:
+                # Try direct hardware access to USB mic on card 2
+                mic = sr.Microphone(device_index=2)  # Card 2 from arecord -l
+                with mic as source:
+                    self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
+                self.logger.info("Direct hardware access to card 2 successful")
+                return mic
+            except Exception as e:
+                self.logger.warning(f"Direct access to card 2 failed: {e}")
+            
+            # Try different device configurations
+            for device_index in range(10):  # Try first 10 devices
+                try:
+                    mic = sr.Microphone(device_index=device_index)
+                    with mic as source:
+                        self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
+                    self.logger.info(f"Direct hardware access successful with device {device_index}")
+                    return mic
+                except Exception as e:
+                    continue
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error finding USB microphone: {e}")
+            return None
+    
+    def _configure_alsa_direct(self):
+        """Configure ALSA for direct hardware access"""
+        try:
+            # Set ALSA environment variables for direct access
+            os.environ['ALSA_PCM_CARD'] = '2'
+            os.environ['ALSA_PCM_DEVICE'] = '0'
+            os.environ['ALSA_CARD'] = '2'
+            
+            # Create minimal ALSA config in memory
+            import tempfile
+            config_content = """
+pcm.!default {
+    type hw
+    card 2
+    device 0
+}
+ctl.!default {
+    type hw
+    card 2
+}
+"""
+            # Write temporary ALSA config
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.conf', delete=False) as f:
+                f.write(config_content)
+                temp_config = f.name
+            
+            # Set ALSA config file
+            os.environ['ALSA_CONFIG_FILE'] = temp_config
+            
+            self.logger.info("ALSA configured for direct hardware access to card 2")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to configure ALSA: {e}")
             return False
     
     def _get_microphone_info(self) -> str:

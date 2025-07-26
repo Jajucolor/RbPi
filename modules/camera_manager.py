@@ -17,6 +17,13 @@ try:
 except ImportError:
     PICAMERA_AVAILABLE = False
     logging.warning("picamera2 not available - using simulation mode")
+except ValueError as e:
+    if "numpy.dtype size changed" in str(e):
+        logging.error("NumPy binary incompatibility detected with picamera2")
+        logging.error("Run: python fix_picamera2_compatibility.py")
+        PICAMERA_AVAILABLE = False
+    else:
+        raise
 
 class CameraManager:
     """Manages camera operations for the assistive glasses"""
