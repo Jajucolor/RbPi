@@ -6,7 +6,7 @@ A Raspberry Pi-based assistive device that uses computer vision and AI to help v
 
 - **Real-time Environment Analysis**: Captures and analyzes surroundings using OpenAI's GPT-4 Vision API
 - **AI Assistant (INTA)**: Intelligent voice assistant with OpenAI-powered natural language processing and command understanding
-- **Voice Recognition**: Continuous listening using OpenAI Whisper for hands-free operation
+- **Voice Recognition**: Continuous listening using speech_recognition library with Google Speech Recognition and Whisper fallback
 - **Audio Feedback**: Converts visual information to speech using text-to-speech technology
 - **Simple Controls**: Easy-to-use button interface for capturing and analyzing environments
 - **Modular Design**: Well-organized codebase with separate modules for different functionalities
@@ -71,8 +71,9 @@ The INTA (Intelligent Navigation and Text Analysis) AI assistant provides:
 
 ### INTA AI Manager (`modules/inta_ai_manager.py`)
 - Provides intelligent voice assistant capabilities powered by OpenAI
-- Handles speech recognition using Whisper
+- Handles speech recognition using speech_recognition library with Google Speech Recognition and Whisper fallback
 - Manages conversation context and command execution
+- Automatic microphone detection and ambient noise adjustment
 
 ## 🚀 Quick Start
 
@@ -182,19 +183,18 @@ python demo_inta.py
 
 ## 🔧 Technical Implementation
 
-### Low-Latency Audio Processing (ALSA Optimized)
+### Speech Recognition Processing
 ```
-Microphone → ALSA Direct → 16-bit PCM → VAD → Whisper → OpenAI → Response
+Microphone → speech_recognition → Google Speech Recognition → OpenAI → Response
 ```
 
-**Key Optimizations for Raspberry Pi:**
-- **ALSA Direct Access**: Bypasses PyAudio for lower latency
-- **WebRTC VAD**: Accurate voice activity detection
-- **8kHz Sample Rate**: Optimized for Pi's audio hardware
-- **512-byte Chunks**: Smaller buffers for real-time processing
-- **Tiny Whisper Model**: Faster inference on limited hardware
-- **Continuous Streaming**: No gaps in audio capture
-- **OpenAI Integration**: Natural language processing and conversation
+**Key Features:**
+- **Automatic Microphone Detection**: No manual device selection needed
+- **Ambient Noise Adjustment**: Automatically adapts to environment
+- **Dual Recognition Engine**: Google Speech Recognition + Whisper fallback
+- **Cross-Platform Compatibility**: Works on Windows, Linux, and Raspberry Pi
+- **Dynamic Energy Threshold**: Adjusts sensitivity automatically
+- **Real-time Processing**: Continuous listening with immediate response
 
 ### Fallback Audio Processing
 ```
@@ -213,13 +213,19 @@ Voice Command → Speech Recognition → Intent Detection → Function Execution
 
 ## 🎤 Voice Recognition System
 
-### Whisper Integration
-- **Continuous Listening**: INTA constantly listens for voice commands using Whisper speech recognition
-- **Natural Language Processing**: Understands conversational commands and questions
-- **Noise Handling**: Automatically detects speech and filters background noise
-- **Audio Processing**: Proper WAV format handling for compatibility
+### Speech Recognition Integration
+- **Continuous Listening**: INTA constantly listens for voice commands using speech_recognition library
+- **Dual Engine**: Google Speech Recognition (primary) + Whisper (fallback)
+- **Automatic Microphone Detection**: No manual configuration needed
+- **Ambient Noise Adjustment**: Automatically adapts to environment
+- **Cross-Platform**: Works on Windows, Linux, and Raspberry Pi
 
-### Whisper Model Options
+### Recognition Engine Options
+- **Google Speech Recognition**: Online, high accuracy, requires internet
+- **Whisper (Fallback)**: Offline, privacy-focused, works without internet
+- **Automatic Fallback**: Seamlessly switches between engines
+
+### Whisper Model Options (Fallback)
 - **`tiny`**: Fastest, lowest accuracy (39MB)
 - **`base`**: Balanced speed/accuracy (74MB) - **Recommended**
 - **`small`**: Better accuracy, slower (244MB)
@@ -272,8 +278,9 @@ Voice Command → Speech Recognition → Intent Detection → Function Execution
 
 ### Core Dependencies
 - `openai>=1.0.0` - OpenAI API client
-- `openai-whisper>=20231117` - Speech recognition
-- `pyaudio>=0.2.11` - Audio recording
+- `speechrecognition>=3.10.0` - Speech recognition library
+- `openai-whisper>=20231117` - Offline speech recognition (fallback)
+- `pyaudio>=0.2.11` - Audio recording backend
 - `numpy>=1.21.0` - Audio processing
 - `picamera2>=0.3.0` - Raspberry Pi camera interface
 - `gTTS>=2.3.0` - Google Text-to-Speech engine

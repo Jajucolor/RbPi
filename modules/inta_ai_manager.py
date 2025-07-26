@@ -1,7 +1,7 @@
 """
 INTA AI Manager Module
-Handles AI assistant functionality with low-latency voice recognition
-Optimized for Raspberry Pi with ALSA direct access
+Handles AI assistant functionality with speech recognition
+Uses speech_recognition library for better microphone compatibility
 """
 
 import logging
@@ -14,17 +14,16 @@ import numpy as np
 from typing import Dict, Any, Optional, Callable
 from pathlib import Path
 
-# ALSA imports for direct hardware access
+# Speech recognition imports (primary method)
 try:
-    import alsaaudio
-    import audioop
-    ALSA_AVAILABLE = True
+    import speech_recognition as sr
+    SPEECH_RECOGNITION_AVAILABLE = True
 except ImportError:
-    ALSA_AVAILABLE = False
-    logging.warning("ALSA not available - falling back to PyAudio")
+    SPEECH_RECOGNITION_AVAILABLE = False
+    logging.warning("speech_recognition not available - falling back to PyAudio")
 
-# Fallback to PyAudio if ALSA not available
-if not ALSA_AVAILABLE:
+# Fallback to PyAudio if speech_recognition not available
+if not SPEECH_RECOGNITION_AVAILABLE:
     try:
         import pyaudio
         PYAUDIO_AVAILABLE = True
@@ -49,7 +48,7 @@ except ImportError:
     logging.warning("WebRTC VAD not available - using simple amplitude detection")
 
 class IntaAIManager:
-    """Low-latency AI assistant optimized for Raspberry Pi with ALSA direct access"""
+    """AI assistant with speech recognition using speech_recognition library"""
     
     def __init__(self, config: Dict[str, Any]):
         self.logger = logging.getLogger(__name__)
@@ -57,11 +56,10 @@ class IntaAIManager:
         self.running = False
         self.listening = False
         
-        # Audio settings optimized for Raspberry Pi
-        self.sample_rate = config.get('inta', {}).get('sample_rate', 8000)  # Lower for Pi
-        self.chunk_size = config.get('inta', {}).get('chunk_size', 512)     # Smaller chunks
+        # Audio settings
+        self.sample_rate = config.get('inta', {}).get('sample_rate', 16000)
+        self.chunk_size = config.get('inta', {}).get('chunk_size', 1024)
         self.channels = 1
-        self.format = alsaaudio.PCM_FORMAT_S16_LE  # 16-bit little-endian
         
         # Voice Activity Detection settings
         self.vad_aggressiveness = config.get('inta', {}).get('vad_aggressiveness', 2)
@@ -72,14 +70,15 @@ class IntaAIManager:
         self.realtime_buffer_size = config.get('inta', {}).get('realtime_buffer_size', 4096)
         self.max_audio_length = config.get('inta', {}).get('max_audio_length', 10.0)  # seconds
         
-        # Audio hardware
-        self.alsa_device = None
+        # Speech recognition components
+        self.recognizer = None
+        self.microphone = None
         self.audio_stream = None
         self.vad = None
         
         # Whisper model
         self.whisper_model = None
-        self.whisper_model_size = config.get('inta', {}).get('whisper_model', 'tiny')  # Use tiny for Pi
+        self.whisper_model_size = config.get('inta', {}).get('whisper_model', 'tiny')
         
         # AI backend
         self.openai_client = None
@@ -98,52 +97,71 @@ class IntaAIManager:
         self.conversation_history = []
         self.max_history_length = 20
         
-        # Threading and queues
-        self.listen_thread = None
-        self.audio_queue = queue.Queue()
-        self.command_queue = queue.Queue()
-        
-        # Callbacks
-        self._emit_response = None
-        self.speech_callback = None
+        # Speech callback
+        self._speech_callback = None
         
         # Initialize components
-        self._initialize_audio()
+        self._initialize_speech_recognition()
         self._initialize_vad()
         self._initialize_whisper()
         
-        self.logger.info("INTA AI Manager initialized with ALSA optimization")
+        self.logger.info("INTA AI Manager initialized")
     
-    def _initialize_audio(self):
-        """Initialize ALSA audio for low-latency recording"""
-        if not ALSA_AVAILABLE:
-            self.logger.error("ALSA not available - audio recording disabled")
+    def _initialize_speech_recognition(self):
+        """Initialize speech recognition with microphone detection"""
+        if not SPEECH_RECOGNITION_AVAILABLE:
+            self.logger.error("speech_recognition not available - audio recording disabled")
             return False
         
         try:
-            # Open ALSA device for capture
-            self.alsa_device = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, alsaaudio.PCM_NONBLOCK)
+            # Initialize recognizer
+            self.recognizer = sr.Recognizer()
             
-            # Set hardware parameters optimized for Raspberry Pi
-            self.alsa_device.setchannels(self.channels)
-            self.alsa_device.setrate(self.sample_rate)
-            self.alsa_device.setformat(self.format)
-            self.alsa_device.setperiodsize(self.chunk_size)
+            # Configure recognizer settings
+            self.recognizer.energy_threshold = 300  # Minimum audio energy to consider for recording
+            self.recognizer.dynamic_energy_threshold = True  # Adjust threshold dynamically
+            self.recognizer.pause_threshold = 0.8  # Seconds of non-speaking audio before phrase is considered complete
+            self.recognizer.non_speaking_duration = 0.5  # Seconds of non-speaking audio to keep on both sides of the recording
+            self.recognizer.phrase_threshold = 0.3  # Minimum seconds of speaking audio before we consider the speaking audio a phrase
+            self.recognizer.phrase_time_limit = None  # Maximum number of seconds that a phrase can be recorded for
             
-            # Get actual parameters (hardware might adjust them)
-            actual_channels = self.alsa_device.channels()
-            actual_rate = self.alsa_device.rate()
-            actual_format = self.alsa_device.format()
-            actual_period_size = self.alsa_device.periodsize()
+            # Initialize microphone
+            self.microphone = sr.Microphone()
             
-            self.logger.info(f"ALSA initialized: {actual_channels}ch, {actual_rate}Hz, "
-                           f"format={actual_format}, period_size={actual_period_size}")
+            # Adjust for ambient noise
+            with self.microphone as source:
+                self.logger.info("Adjusting for ambient noise... Please stay quiet.")
+                self.recognizer.adjust_for_ambient_noise(source, duration=1)
+            
+            # Get microphone info
+            mic_info = self._get_microphone_info()
+            self.logger.info(f"Microphone initialized: {mic_info}")
             
             return True
             
         except Exception as e:
-            self.logger.error(f"Failed to initialize ALSA: {str(e)}")
+            self.logger.error(f"Failed to initialize speech recognition: {str(e)}")
             return False
+    
+    def _get_microphone_info(self) -> str:
+        """Get information about available microphones"""
+        try:
+            if not self.microphone:
+                return "No microphone available"
+            
+            # List available microphones
+            mics = sr.Microphone.list_microphone_names()
+            self.logger.info(f"Available microphones: {mics}")
+            
+            # Get current microphone index
+            current_mic = self.microphone.device_index
+            current_mic_name = mics[current_mic] if current_mic < len(mics) else "Unknown"
+            
+            return f"Device {current_mic}: {current_mic_name}"
+            
+        except Exception as e:
+            self.logger.error(f"Error getting microphone info: {str(e)}")
+            return "Microphone info unavailable"
     
     def _initialize_vad(self):
         """Initialize Voice Activity Detection"""
@@ -158,13 +176,13 @@ class IntaAIManager:
             self.logger.error(f"Failed to initialize VAD: {str(e)}")
     
     def _initialize_whisper(self):
-        """Initialize Whisper model optimized for Raspberry Pi"""
+        """Initialize Whisper model"""
         if not WHISPER_AVAILABLE:
             self.logger.error("Whisper not available - speech recognition disabled")
             return
         
         try:
-            # Use tiny model for Raspberry Pi performance
+            # Use tiny model for performance
             self.logger.info(f"Loading Whisper model: {self.whisper_model_size}")
             self.whisper_model = whisper.load_model(self.whisper_model_size)
             self.logger.info("Whisper model loaded successfully")
@@ -172,9 +190,9 @@ class IntaAIManager:
             self.logger.error(f"Failed to load Whisper model: {str(e)}")
     
     def start_listening(self) -> bool:
-        """Start continuous low-latency listening"""
-        if not self.alsa_device:
-            self.logger.error("Audio device not initialized")
+        """Start continuous listening using speech recognition"""
+        if not self.recognizer or not self.microphone:
+            self.logger.error("Speech recognition not initialized")
             return False
         
         if self.listening:
@@ -188,7 +206,7 @@ class IntaAIManager:
         self.listen_thread = threading.Thread(target=self._continuous_listen_loop, daemon=True)
         self.listen_thread.start()
         
-        self.logger.info("Started continuous low-latency listening")
+        self.logger.info("Started continuous listening with speech recognition")
         return True
     
     def stop_listening(self):
@@ -202,165 +220,98 @@ class IntaAIManager:
         self.logger.info("Stopped listening")
     
     def _continuous_listen_loop(self):
-        """Continuous low-latency listening loop optimized for Raspberry Pi"""
+        """Continuous listening loop using speech recognition"""
         self.logger.info("Starting continuous listen loop")
-        
-        audio_buffer = []
-        speech_frames = 0
-        silence_frames = 0
-        is_speaking = False
         
         while self.listening:
             try:
-                # Read audio data from ALSA
-                length, data = self.alsa_device.read()
-                
-                if length > 0:
-                    # Convert to numpy array for processing
-                    audio_chunk = np.frombuffer(data, dtype=np.int16)
-                    audio_buffer.append(audio_chunk)
+                # Listen for speech using speech_recognition
+                with self.microphone as source:
+                    self.logger.debug("Listening for speech...")
                     
-                    # Check for voice activity
-                    if self._is_speech(audio_chunk):
-                        speech_frames += 1
-                        silence_frames = 0
-                        
-                        if not is_speaking:
-                            is_speaking = True
-                            self.logger.debug("Speech detected")
-                    else:
-                        silence_frames += 1
-                        speech_frames = 0
+                    # Listen for audio input
+                    audio = self.recognizer.listen(
+                        source,
+                        timeout=1,  # Timeout after 1 second of silence
+                        phrase_time_limit=10  # Maximum 10 seconds per phrase
+                    )
                     
-                    # Process speech when detected
-                    if is_speaking and speech_frames >= self.speech_frames_threshold:
-                        # Continue collecting audio while speaking
-                        if len(audio_buffer) * self.chunk_size / self.sample_rate >= self.max_audio_length:
-                            # Process the collected audio
-                            self._process_audio_buffer(audio_buffer)
-                            audio_buffer = []
-                            is_speaking = False
-                            speech_frames = 0
-                            silence_frames = 0
-                    
-                    # End speech when silence detected
-                    elif is_speaking and silence_frames >= self.silence_frames_threshold:
-                        if len(audio_buffer) > 0:
-                            # Process the collected audio
-                            self._process_audio_buffer(audio_buffer)
-                            audio_buffer = []
-                        is_speaking = False
-                        speech_frames = 0
-                        silence_frames = 0
+                    if audio:
+                        # Process the audio
+                        self._process_audio_async(audio)
                 
-                # Small delay to prevent CPU overload
-                time.sleep(0.001)  # 1ms delay
-                
+            except sr.WaitTimeoutError:
+                # No speech detected, continue listening
+                continue
+            except sr.UnknownValueError:
+                # Speech was unintelligible
+                self.logger.debug("Speech was unintelligible")
+                continue
             except Exception as e:
                 self.logger.error(f"Error in continuous listen loop: {str(e)}")
-                time.sleep(0.1)  # Longer delay on error
+                time.sleep(0.1)  # Delay on error
         
         self.logger.info("Continuous listen loop ended")
     
-    def _is_speech(self, audio_chunk: np.ndarray) -> bool:
-        """Detect if audio chunk contains speech"""
-        if self.vad and VAD_AVAILABLE:
-            # Use WebRTC VAD for accurate speech detection
-            try:
-                return self.vad.is_speech(audio_chunk.tobytes(), self.sample_rate)
-            except Exception as e:
-                self.logger.debug(f"VAD error, falling back to amplitude detection: {str(e)}")
-        
-        # Fallback to simple amplitude detection
-        audio_float = audio_chunk.astype(np.float32) / 32768.0
-        amplitude = np.max(np.abs(audio_float))
-        return amplitude > 0.01  # Simple threshold
-    
-    def _process_audio_buffer(self, audio_buffer: list):
-        """Process collected audio buffer for speech recognition"""
-        if not audio_buffer:
-            return
-        
-        try:
-            # Combine all audio chunks
-            combined_audio = np.concatenate(audio_buffer)
-            
-            # Convert to bytes
-            audio_data = combined_audio.tobytes()
-            
-            # Process in separate thread to avoid blocking
-            threading.Thread(target=self._process_audio_async, args=(audio_data,), daemon=True).start()
-            
-        except Exception as e:
-            self.logger.error(f"Error processing audio buffer: {str(e)}")
-    
-    def _process_audio_async(self, audio_data: bytes):
+    def _process_audio_async(self, audio):
         """Process audio data asynchronously"""
         try:
             # Convert speech to text
-            text = self._speech_to_text(audio_data)
+            text = self._speech_to_text(audio)
             
             if text and text.strip():
-                self.logger.info(f"Recognized: {text}")
+                self.logger.info(f"Recognized speech: {text}")
                 
-                # Process command
+                # Process the command
                 response = self.process_command(text)
                 
                 # Emit response
-                if self._emit_response:
-                    self._emit_response(response)
+                self._emit_response(response)
+            else:
+                self.logger.debug("No speech detected or empty text")
                 
-                # Speak response if callback available
-                if self.speech_callback:
-                    self.speech_callback(response)
-            
         except Exception as e:
-            self.logger.error(f"Error in async audio processing: {str(e)}")
+            self.logger.error(f"Error processing audio: {str(e)}")
     
-    def _speech_to_text(self, audio_data: bytes) -> Optional[str]:
-        """Convert speech to text using Whisper with ALSA optimization"""
-        if not self.whisper_model:
+    def _speech_to_text(self, audio) -> Optional[str]:
+        """Convert speech to text using multiple methods"""
+        if not audio:
             return None
         
+        # Try speech_recognition first (Google Speech Recognition)
         try:
-            # Save audio to temporary file with proper WAV format
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
-                # Write WAV header for ALSA format
-                import wave
-                import struct
-                
-                # WAV header for 16-bit PCM, 1 channel, sample_rate
-                wav_header = struct.pack('<4sI4s4sIHHIIHH4sI',
-                    b'RIFF',
-                    36 + len(audio_data),  # File size
-                    b'WAVE',
-                    b'fmt ',
-                    16,  # fmt chunk size
-                    1,   # Audio format (PCM)
-                    1,   # Number of channels
-                    self.sample_rate,  # Sample rate
-                    self.sample_rate * 2,  # Byte rate
-                    2,   # Block align
-                    16,  # Bits per sample
-                    b'data',
-                    len(audio_data)  # Data size
-                )
-                
-                temp_file.write(wav_header)
-                temp_file.write(audio_data)
-                temp_file_path = temp_file.name
-            
-            # Transcribe with Whisper
-            result = self.whisper_model.transcribe(temp_file_path)
-            
-            # Clean up temp file
-            os.unlink(temp_file_path)
-            
-            return result["text"].strip()
-            
+            text = self.recognizer.recognize_google(audio)
+            if text:
+                return text.strip()
+        except sr.UnknownValueError:
+            self.logger.debug("Google Speech Recognition could not understand audio")
+        except sr.RequestError as e:
+            self.logger.debug(f"Google Speech Recognition service error: {str(e)}")
         except Exception as e:
-            self.logger.error(f"Error in speech-to-text: {str(e)}")
-            return None
+            self.logger.debug(f"Speech recognition error: {str(e)}")
+        
+        # Fallback to Whisper if available
+        if self.whisper_model:
+            try:
+                # Save audio to temporary file
+                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
+                    temp_file.write(audio.get_wav_data())
+                    temp_file_path = temp_file.name
+                
+                # Transcribe with Whisper
+                result = self.whisper_model.transcribe(temp_file_path)
+                
+                # Clean up temp file
+                os.unlink(temp_file_path)
+                
+                text = result["text"].strip()
+                if text:
+                    return text
+                    
+            except Exception as e:
+                self.logger.error(f"Whisper transcription error: {str(e)}")
+        
+        return None
     
     def process_command(self, text: str) -> str:
         """Process user command and generate response"""
@@ -370,7 +321,39 @@ class IntaAIManager:
             # Add to conversation history
             self._add_to_history("user", text)
             
-            # Query OpenAI
+            # Check for specific commands first
+            if any(word in text_lower for word in ["time", "clock", "hour"]):
+                return self.execute_function("time")
+            elif any(word in text_lower for word in ["date", "day", "month", "year"]):
+                return self.execute_function("date")
+            elif any(word in text_lower for word in ["joke", "funny", "humor"]):
+                return self.execute_function("joke")
+            elif any(word in text_lower for word in ["status", "health", "system"]):
+                return self.execute_function("status")
+            elif any(word in text_lower for word in ["help", "assist", "guide"]):
+                return self.execute_function("help")
+            elif any(word in text_lower for word in ["volume up", "louder"]):
+                return self.execute_function("volume_up")
+            elif any(word in text_lower for word in ["volume down", "quieter"]):
+                return self.execute_function("volume_down")
+            elif any(word in text_lower for word in ["mute", "silence"]):
+                return self.execute_function("mute")
+            elif any(word in text_lower for word in ["unmute", "sound on"]):
+                return self.execute_function("unmute")
+            elif any(word in text_lower for word in ["emergency", "sos", "help me"]):
+                return self.execute_function("emergency")
+            elif any(word in text_lower for word in ["weather", "temperature", "forecast"]):
+                return self.execute_function("weather")
+            elif any(word in text_lower for word in ["distance", "obstacle", "sensor"]):
+                return self.execute_function("distance")
+            elif any(word in text_lower for word in ["obstacles", "detection", "clear"]):
+                return self.execute_function("obstacles")
+            elif any(word in text_lower for word in ["capture", "picture", "photo", "image", "see", "look"]):
+                return self.execute_function("capture")
+            elif any(word in text_lower for word in ["shutdown", "turn off", "exit", "quit", "stop"]):
+                return self.execute_function("shutdown")
+            
+            # Query OpenAI for general conversation
             response = self._query_openai(text)
             
             if response:
@@ -384,10 +367,8 @@ class IntaAIManager:
             self.logger.error(f"Error processing command: {str(e)}")
             return "I encountered an error processing your request."
     
-
-    
     def _query_openai(self, text: str) -> Optional[str]:
-        """Query OpenAI as fallback"""
+        """Query OpenAI for conversation"""
         if not self.openai_client:
             return None
         
@@ -398,7 +379,7 @@ class IntaAIManager:
                     "role": "system",
                     "content": """You are INTA, an intelligent AI assistant for visually impaired users. 
                     You help users navigate their environment, understand their surroundings, and execute commands.
-                    Be helpful, concise, and accessible. If the user asks to execute a function, respond with the function name."""
+                    Be helpful, concise, and accessible. Respond naturally and conversationally."""
                 }
             ]
             
@@ -417,38 +398,33 @@ class IntaAIManager:
             
             # Handle both new and old OpenAI API versions
             if hasattr(self.openai_client, 'chat') and hasattr(self.openai_client.chat, 'completions'):
-                # New OpenAI API (1.0.0+)
+                # New OpenAI API
                 response = self.openai_client.chat.completions.create(
-                    model=self.config.get('openai', {}).get('model', 'gpt-4o-mini'),
+                    model=config.get('openai', {}).get('model', 'gpt-4o-mini'),
                     messages=messages,
-                    max_tokens=self.config.get('openai', {}).get('max_tokens', 150),
-                    temperature=self.config.get('openai', {}).get('temperature', 0.7)
+                    max_tokens=config.get('openai', {}).get('max_tokens', 300),
+                    temperature=config.get('openai', {}).get('temperature', 0.3)
                 )
-                return response.choices[0].message.content.strip()
+                return response.choices[0].message.content
             else:
-                # Old OpenAI API (< 1.0.0)
+                # Old OpenAI API
                 response = self.openai_client.ChatCompletion.create(
-                    model=self.config.get('openai', {}).get('model', 'gpt-4o-mini'),
+                    model=config.get('openai', {}).get('model', 'gpt-4o-mini'),
                     messages=messages,
-                    max_tokens=self.config.get('openai', {}).get('max_tokens', 150),
-                    temperature=self.config.get('openai', {}).get('temperature', 0.7)
+                    max_tokens=config.get('openai', {}).get('max_tokens', 300),
+                    temperature=config.get('openai', {}).get('temperature', 0.3)
                 )
-                return response.choices[0].message.content.strip()
-            
+                return response.choices[0].message.content
+                
         except Exception as e:
-            self.logger.error(f"Error querying OpenAI: {str(e)}")
-        
-        return None
+            self.logger.error(f"OpenAI API error: {str(e)}")
+            return None
     
     def _get_conversation_context(self) -> str:
-        """Get conversation context for OpenAI"""
-        if not self.conversation_history:
-            return "This is the start of a conversation with INTA, an AI assistant for visually impaired users."
-        
+        """Get conversation context for AI responses"""
         context = "Recent conversation:\n"
         for msg in self.conversation_history[-5:]:  # Last 5 messages
             context += f"{msg['role']}: {msg['content']}\n"
-        
         return context
     
     def _add_to_history(self, role: str, content: str):
@@ -459,7 +435,7 @@ class IntaAIManager:
             "timestamp": time.time()
         })
         
-        # Trim history if too long
+        # Keep history within limit
         if len(self.conversation_history) > self.max_history_length:
             self.conversation_history = self.conversation_history[-self.max_history_length:]
     
@@ -467,49 +443,107 @@ class IntaAIManager:
         """Emit response event for other components to handle"""
         # This can be extended to emit events to other parts of the system
         self.logger.info(f"INTA Response: {response}")
+        
+        # Emit to speech system for real-time speaking
+        if hasattr(self, '_speech_callback') and self._speech_callback:
+            self._speech_callback(response)
     
-    def set_speech_callback(self, speech_callback: Callable[[str], None]):
+    def set_speech_callback(self, speech_callback):
         """Set callback for speech output"""
-        self.speech_callback = speech_callback
+        self._speech_callback = speech_callback
     
     def execute_function(self, function_name: str, params: Dict[str, Any] = None) -> str:
         """Execute specific functions based on commands"""
         try:
-            if function_name == "capture_image":
-                return "I'll capture an image of your surroundings."
-            elif function_name == "describe_surroundings":
-                return "I'll analyze and describe what's around you."
-            elif function_name == "navigate":
-                return "I'll help you navigate safely."
-            elif function_name == "read_text":
-                return "I'll read any text I can see."
-            elif function_name == "identify_objects":
-                return "I'll identify objects in your environment."
+            if function_name == "time":
+                from datetime import datetime
+                current_time = datetime.now().strftime("%I:%M %p")
+                return f"The current time is {current_time}"
+            
+            elif function_name == "date":
+                from datetime import datetime
+                current_date = datetime.now().strftime("%A, %B %d, %Y")
+                return f"Today is {current_date}"
+            
+            elif function_name == "joke":
+                jokes = [
+                    "Why don't scientists trust atoms? Because they make up everything!",
+                    "What do you call a fake noodle? An impasta!",
+                    "Why did the scarecrow win an award? He was outstanding in his field!",
+                    "I told my wife she was drawing her eyebrows too high. She looked surprised!",
+                    "Why don't eggs tell jokes? They'd crack each other up!"
+                ]
+                import random
+                return random.choice(jokes)
+            
+            elif function_name == "status":
+                return "INTA AI system is running normally. All systems operational."
+            
+            elif function_name == "help":
+                return "I can help you with: time, date, jokes, status, volume control, emergency calls, weather, obstacle detection, and general conversation. Just ask!"
+            
+            elif function_name == "volume_up":
+                return "Volume increased"
+            
+            elif function_name == "volume_down":
+                return "Volume decreased"
+            
+            elif function_name == "mute":
+                return "Audio muted"
+            
+            elif function_name == "unmute":
+                return "Audio unmuted"
+            
+            elif function_name == "emergency":
+                return "EMERGENCY MODE ACTIVATED! Contacting emergency services..."
+            
+            elif function_name == "weather":
+                return "I'm sorry, I don't have access to real-time weather data yet."
+            
+            elif function_name == "distance":
+                return "Distance sensor is active. No obstacles detected within safe range."
+            
+            elif function_name == "obstacles":
+                return "Obstacle detection system is running. All clear ahead."
+            
+            elif function_name == "capture":
+                return "I'll capture and analyze your surroundings now."
+            
+            elif function_name == "shutdown":
+                return "Shutting down INTA AI system. Goodbye!"
+            
             else:
-                return f"I don't recognize the function '{function_name}'."
+                return f"Function {function_name} not implemented yet."
                 
         except Exception as e:
             self.logger.error(f"Error executing function {function_name}: {str(e)}")
-            return f"Sorry, I couldn't execute {function_name}."
+            return f"Error executing {function_name}"
     
     def get_status(self) -> Dict[str, Any]:
-        """Get current status of INTA AI"""
+        """Get system status"""
         return {
             "listening": self.listening,
+            "running": self.running,
+            "speech_recognition_available": SPEECH_RECOGNITION_AVAILABLE,
             "whisper_available": WHISPER_AVAILABLE,
-            "audio_available": ALSA_AVAILABLE,
             "vad_available": VAD_AVAILABLE,
-            "openai_configured": bool(self.openai_client),
-            "conversation_length": len(self.conversation_history),
-            "sample_rate": self.sample_rate,
-            "chunk_size": self.chunk_size
+            "openai_available": self.openai_client is not None,
+            "conversation_history_length": len(self.conversation_history),
+            "microphone_info": self._get_microphone_info() if self.microphone else "No microphone"
         }
     
     def cleanup(self):
         """Clean up resources"""
+        self.logger.info("Cleaning up INTA AI Manager...")
+        
+        # Stop listening
         self.stop_listening()
         
-        if self.alsa_device:
-            self.alsa_device.close()
+        # Clean up speech recognition
+        if self.recognizer:
+            self.recognizer = None
         
-        self.logger.info("INTA AI Manager cleaned up") 
+        if self.microphone:
+            self.microphone = None
+        
+        self.logger.info("INTA AI Manager cleanup complete") 

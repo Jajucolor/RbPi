@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 INTA AI Setup Script
-Quick setup and configuration for the ALSA-optimized INTA AI assistant
+Quick setup and configuration for the speech_recognition-based INTA AI assistant
 """
 
 import os
@@ -14,10 +14,10 @@ from pathlib import Path
 def print_header():
     """Print setup header"""
     print("=" * 60)
-    print("INTA AI Assistant Setup (ALSA Optimized)")
+    print("INTA AI Assistant Setup (Speech Recognition)")
     print("=" * 60)
     print("This script will help you set up the INTA AI assistant")
-    print("with low-latency ALSA audio for Raspberry Pi.")
+    print("with speech_recognition library for cross-platform compatibility.")
     print()
 
 def check_python_version():
@@ -39,10 +39,10 @@ def install_dependencies():
         subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
         print("✅ Python dependencies installed successfully")
         
-        # Install additional ALSA dependencies
-        print("Installing ALSA-specific dependencies...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "webrtcvad", "pyalsaaudio"])
-        print("✅ ALSA dependencies installed successfully")
+        # Install additional speech recognition dependencies
+        print("Installing speech recognition dependencies...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "speechrecognition>=3.10.0"])
+        print("✅ Speech recognition dependencies installed successfully")
         
         return True
     except subprocess.CalledProcessError as e:
@@ -62,61 +62,27 @@ def install_system_dependencies():
                 os_info = f.read().lower()
             
             if "ubuntu" in os_info or "debian" in os_info or "raspbian" in os_info:
-                print("Installing ALSA and audio dependencies...")
+                print("Installing audio dependencies...")
                 subprocess.check_call(["sudo", "apt", "update"])
                 subprocess.check_call(["sudo", "apt", "install", "-y", 
                                      "portaudio19-dev", "python3-pyaudio", "ffmpeg",
-                                     "python3-alsaaudio", "alsa-utils"])
+                                     "flac", "alsa-utils"])
                 
                 # Add user to audio group
                 print("Setting up audio permissions...")
                 subprocess.check_call(["sudo", "usermod", "-a", "-G", "audio", os.getenv("USER", "pi")])
                 
-                # Optimize ALSA for low latency
-                print("Optimizing ALSA for low latency...")
-                alsa_config = """# Low-latency ALSA configuration for Raspberry Pi
-pcm.!default {
-    type plug
-    slave.pcm "hw:0,0"
-}
-
-ctl.!default {
-    type hw
-    card 0
-}
-
-# Optimize for low latency
-pcm.lowlatency {
-    type plug
-    slave.pcm "hw:0,0"
-    slave.rate 8000
-    slave.channels 1
-    slave.format S16_LE
-    slave.period_size 512
-    slave.buffer_size 2048
-}"""
-                
-                with open("/tmp/asound.conf", "w") as f:
-                    f.write(alsa_config)
-                subprocess.check_call(["sudo", "cp", "/tmp/asound.conf", "/etc/asound.conf"])
-                
-                # Set real-time priority for audio
-                print("Setting up real-time audio priority...")
-                rt_config = """# Real-time audio priority for INTA AI
-@audio - rtprio 95
-@audio - memlock unlimited"""
-                
-                with open("/tmp/limits.conf", "w") as f:
-                    f.write(rt_config)
-                subprocess.check_call(["sudo", "tee", "-a", "/etc/security/limits.conf"], input=rt_config.encode())
+                # Install flac for Google Speech Recognition
+                print("Installing FLAC for Google Speech Recognition...")
+                subprocess.check_call(["sudo", "apt", "install", "-y", "flac"])
                 
             elif "fedora" in os_info or "rhel" in os_info:
                 subprocess.check_call(["sudo", "dnf", "install", "-y", 
                                      "portaudio-devel", "python3-pyaudio", "ffmpeg",
-                                     "python3-alsaaudio", "alsa-utils"])
+                                     "flac", "alsa-utils"])
             else:
-                print("⚠️  Please install ALSA dependencies manually:")
-                print("   sudo apt install python3-alsaaudio alsa-utils portaudio19-dev python3-pyaudio ffmpeg")
+                print("⚠️  Please install audio dependencies manually:")
+                print("   sudo apt install python3-pyaudio alsa-utils portaudio19-dev ffmpeg flac")
                 return False
             
             print("✅ System dependencies installed successfully")
@@ -128,7 +94,7 @@ pcm.lowlatency {
     
     elif system == "darwin":  # macOS
         try:
-            subprocess.check_call(["brew", "install", "portaudio", "ffmpeg"])
+            subprocess.check_call(["brew", "install", "portaudio", "ffmpeg", "flac"])
             print("✅ System dependencies installed successfully")
             return True
         except subprocess.CalledProcessError as e:
@@ -137,9 +103,9 @@ pcm.lowlatency {
             return False
     
     elif system == "windows":
-        print("⚠️  For Windows, please install Visual C++ Build Tools manually")
+        print("✅ Windows dependencies should install automatically with pip")
+        print("If you encounter issues, install Visual C++ Build Tools:")
         print("Download from: https://visualstudio.microsoft.com/visual-cpp-build-tools/")
-        print("Note: ALSA optimization is not available on Windows")
         return True
     
     else:
@@ -173,19 +139,19 @@ def create_config():
     if openai_key:
         config["openai"]["api_key"] = openai_key
     
-    # ALSA audio settings
-    print("\nALSA Audio Settings (optimized for Raspberry Pi):")
-    sample_rate = input("Sample Rate (default: 8000): ").strip()
+    # Speech recognition settings
+    print("\nSpeech Recognition Settings:")
+    sample_rate = input("Sample Rate (default: 16000): ").strip()
     if sample_rate and sample_rate.isdigit():
         config["inta"]["sample_rate"] = int(sample_rate)
     
-    chunk_size = input("Chunk Size (default: 512): ").strip()
+    chunk_size = input("Chunk Size (default: 1024): ").strip()
     if chunk_size and chunk_size.isdigit():
         config["inta"]["chunk_size"] = int(chunk_size)
     
-    vad_aggressiveness = input("VAD Aggressiveness 0-3 (default: 2): ").strip()
-    if vad_aggressiveness and vad_aggressiveness.isdigit():
-        config["inta"]["vad_aggressiveness"] = int(vad_aggressiveness)
+    energy_threshold = input("Energy Threshold (default: 300): ").strip()
+    if energy_threshold and energy_threshold.isdigit():
+        config["inta"]["energy_threshold"] = int(energy_threshold)
     
     whisper_model = input("Whisper Model (tiny/base/small, default: tiny): ").strip()
     if whisper_model in ["tiny", "base", "small", "medium", "large"]:
@@ -203,13 +169,14 @@ def test_installation():
     print("\nTesting installation...")
     
     tests = [
+        ("Speech Recognition", "import speech_recognition as sr"),
         ("Whisper", "import whisper; whisper.load_model('tiny')"),
-        ("ALSA", "import alsaaudio"),
-        ("WebRTC VAD", "import webrtcvad"),
-        ("PyAudio (fallback)", "import pyaudio"),
+        ("PyAudio", "import pyaudio"),
         ("OpenAI", "import openai"),
         ("NumPy", "import numpy"),
-        ("Requests", "import requests")
+        ("Requests", "import requests"),
+        ("gTTS", "from gtts import gTTS"),
+        ("Pygame", "import pygame")
     ]
     
     all_passed = True
@@ -220,63 +187,57 @@ def test_installation():
             print(f"✅ {name} - OK")
         except Exception as e:
             print(f"❌ {name} - Failed: {e}")
-            if name in ["ALSA", "WebRTC VAD"]:
+            if name in ["Speech Recognition", "PyAudio"]:
                 all_passed = False
             else:
                 print(f"   (This is optional for {name})")
     
     return all_passed
 
-def test_alsa_audio():
-    """Test ALSA audio system"""
-    print("\nTesting ALSA audio system...")
+def test_microphone_detection():
+    """Test microphone detection"""
+    print("\nTesting microphone detection...")
     
     try:
-        import alsaaudio
+        import speech_recognition as sr
         
-        # List available devices
-        devices = alsaaudio.pcms(alsaaudio.PCM_CAPTURE)
-        print(f"✅ Found {len(devices)} ALSA capture devices")
+        # List available microphones
+        mics = sr.Microphone.list_microphone_names()
+        print(f"✅ Found {len(mics)} microphones:")
+        for i, mic in enumerate(mics):
+            print(f"   {i}: {mic}")
         
-        # Test default device
-        device = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, alsaaudio.PCM_NONBLOCK)
-        print(f"✅ Default capture device: {device.cardname()}")
-        
-        # Test parameters
-        device.setchannels(1)
-        device.setrate(8000)
-        device.setformat(alsaaudio.PCM_FORMAT_S16_LE)
-        device.setperiodsize(512)
-        
-        print("✅ ALSA parameters set successfully")
-        device.close()
+        # Test default microphone
+        mic = sr.Microphone()
+        print(f"✅ Default microphone: {mics[mic.device_index]}")
         
         return True
         
     except Exception as e:
-        print(f"❌ ALSA test failed: {e}")
+        print(f"❌ Microphone detection failed: {e}")
         return False
 
-def test_vad():
-    """Test Voice Activity Detection"""
-    print("\nTesting Voice Activity Detection...")
+def test_speech_recognition():
+    """Test speech recognition system"""
+    print("\nTesting speech recognition system...")
     
     try:
-        import webrtcvad
-        import numpy as np
+        import speech_recognition as sr
         
-        vad = webrtcvad.Vad(2)
-        print("✅ VAD initialized successfully")
+        # Initialize recognizer and microphone
+        recognizer = sr.Recognizer()
+        microphone = sr.Microphone()
         
-        # Test with dummy audio
-        dummy_audio = np.zeros(160, dtype=np.int16).tobytes()  # 10ms at 8kHz
-        result = vad.is_speech(dummy_audio, 8000)
-        print(f"✅ VAD test completed (dummy audio result: {result})")
+        # Test ambient noise adjustment
+        print("Testing ambient noise adjustment...")
+        with microphone as source:
+            recognizer.adjust_for_ambient_noise(source, duration=1)
+        print(f"✅ Energy threshold set to: {recognizer.energy_threshold}")
         
         return True
         
     except Exception as e:
-        print(f"❌ VAD test failed: {e}")
+        print(f"❌ Speech recognition test failed: {e}")
         return False
 
 def download_whisper_model():
@@ -285,8 +246,8 @@ def download_whisper_model():
     
     try:
         import whisper
-        model_name = "tiny"  # Fastest for Raspberry Pi
-        print(f"Downloading '{model_name}' model (optimized for Raspberry Pi)...")
+        model_name = "tiny"  # Fastest for general use
+        print(f"Downloading '{model_name}' model...")
         model = whisper.load_model(model_name)
         print("✅ Whisper model downloaded successfully")
         return True
@@ -296,17 +257,17 @@ def download_whisper_model():
 
 def run_test():
     """Run a quick test"""
-    print("\nRunning ALSA-optimized test...")
+    print("\nRunning speech recognition test...")
     
     try:
-        result = subprocess.run([sys.executable, "test_alsa_inta.py"], 
+        result = subprocess.run([sys.executable, "test_speech_recognition.py"], 
                               capture_output=True, text=True, timeout=60)
         
         if result.returncode == 0:
-            print("✅ ALSA test passed")
+            print("✅ Speech recognition test passed")
             return True
         else:
-            print("❌ ALSA test failed")
+            print("❌ Speech recognition test failed")
             print("Output:", result.stdout)
             print("Error:", result.stderr)
             return False
@@ -348,28 +309,28 @@ def main():
     if not test_installation():
         print("\n⚠️  Some components failed tests, but setup can continue...")
     
-    # Test ALSA audio
-    if not test_alsa_audio():
-        print("\n⚠️  ALSA audio test failed, but setup can continue...")
+    # Test microphone detection
+    if not test_microphone_detection():
+        print("\n⚠️  Microphone detection failed, but setup can continue...")
     
-    # Test VAD
-    if not test_vad():
-        print("\n⚠️  VAD test failed, but setup can continue...")
+    # Test speech recognition
+    if not test_speech_recognition():
+        print("\n⚠️  Speech recognition test failed, but setup can continue...")
     
     # Run quick test
     if not run_test():
         print("\n⚠️  Quick test failed, but setup completed...")
     
     print("\n" + "=" * 60)
-    print("🎉 ALSA-Optimized INTA AI Setup Complete!")
+    print("🎉 Speech Recognition INTA AI Setup Complete!")
     print("=" * 60)
     print("\nNext steps:")
-    print("1. Reboot your system: sudo reboot")
+    print("1. Reboot your system: sudo reboot (Linux/Raspberry Pi)")
     print("2. Edit config.json with your API keys if needed")
-    print("3. Test ALSA optimization: python test_alsa_inta.py")
+    print("3. Test microphone detection: python test_speech_recognition.py")
     print("4. Test INTA AI: python test_inta_ai.py")
     print("5. Run the system: python main.py")
-    print("\nFor help, see ALSA_OPTIMIZATION_GUIDE.md")
+    print("\nFor help, see SPEECH_RECOGNITION_GUIDE.md")
     print("\nHappy coding! 🚀")
 
 if __name__ == "__main__":
