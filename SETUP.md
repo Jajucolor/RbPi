@@ -1,145 +1,149 @@
-# Assistive Glasses System Setup Guide
+# INTA AI Setup Guide
 
-This comprehensive guide will help you set up the assistive glasses system with INTA AI assistant on your Raspberry Pi or other platforms.
+## 🚀 **Complete Installation Guide**
 
-## 📋 Hardware Requirements
+This guide provides step-by-step instructions for setting up the INTA AI system on different platforms.
 
-### Essential Components
-- Raspberry Pi 4 (4GB RAM recommended)
-- Raspberry Pi Camera Module v2 or v3
-- MicroSD card (32GB or larger, Class 10)
-- Power supply (5V, 3A)
-- Speakers or headphones with 3.5mm jack
-- **Microphone** for voice input (USB or 3.5mm)
-- Push buttons (2x momentary push buttons)
-- Breadboard and jumper wires
-- Resistors (2x 10kΩ pull-up resistors)
+---
 
-### Optional Components
-- Portable battery pack for mobile use
-- Small amplifier for better audio output
-- LED indicators for system status
-- Enclosure/case for protection
-- USB microphone for better voice quality
+## 📋 **System Requirements**
 
-## 🖥️ Software Installation
+### **Hardware Requirements**
+- **Raspberry Pi 4** (4GB RAM recommended) or compatible computer
+- **Raspberry Pi Camera Module** v2 or v3 (for vision features)
+- **Microphone** for voice input
+- **Speakers/Headphones** for audio output
+- **Push buttons** (2x) for hardware control
+- **MicroSD card** (32GB+) for Raspberry Pi
 
-### Step 1: Prepare Raspberry Pi OS
+### **Software Requirements**
+- **Python 3.8+**
+- **Raspberry Pi OS** (64-bit) or compatible Linux distribution
+- **Windows 10/11** or **macOS 10.15+** (for development/testing)
+- **Internet connection** for API access and model downloads
 
-1. **Install Raspberry Pi OS**
-   ```bash
-   # Use Raspberry Pi Imager to install Raspberry Pi OS (64-bit recommended)
-   # Enable SSH, I2C, and Camera in raspi-config
-   sudo raspi-config
-   ```
+---
 
-2. **Update system packages**
-   ```bash
-   sudo apt update
-   sudo apt upgrade -y
-   ```
+## 🔧 **Installation Methods**
 
-3. **Install system dependencies**
-   ```bash
-   sudo apt install -y python3-pip python3-venv git
-   sudo apt install -y python3-pygame alsa-utils
-   sudo apt install -y mpg321 mpg123
-   sudo apt install -y portaudio19-dev python3-pyaudio ffmpeg
-   sudo apt install -y python3-alsaaudio
-   ```
-
-### Step 2: Install Camera and GPIO Libraries
-
-1. **Install picamera2**
-   ```bash
-   sudo apt install -y python3-picamera2
-   ```
-
-2. **Install RPi.GPIO**
-   ```bash
-   pip3 install RPi.GPIO
-   ```
-
-### Step 3: Clone and Setup Project
-
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd assistive-glasses
-   ```
-
-2. **Create virtual environment**
-   ```bash
-   python3 -m venv glasses_env
-   source glasses_env/bin/activate
-   ```
-   
-   **Alternative setup for system packages:**
-   ```bash
-   # 1. Deactivate and delete old venv
-   deactivate
-   rm -r ~/RbPi/glasses_env
-   
-   # 2. Recreate with --system-site-packages
-   cd ~/RbPi
-   python3 -m venv glasses_env --system-site-packages
-   
-   # 3. Activate
-   source glasses_env/bin/activate
-   ```
-
-3. **Install Python dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-### Step 4: Quick Setup with INTA AI
-
-For automated setup and configuration:
+### **Method 1: Automated Setup (Recommended)**
 
 ```bash
+# Clone the repository
+git clone <repository-url>
+cd RbPi
+
 # Run the automated setup script
 python setup_inta.py
 ```
 
-This script will:
-- Check Python version compatibility
-- Install all dependencies
-- Configure system settings
-- Download Whisper models
-- Test the installation
-- Create configuration files
+The setup script will automatically:
+- ✅ Install Python dependencies
+- ✅ Install system dependencies
+- ✅ Configure audio settings
+- ✅ Download Whisper models
+- ✅ Create configuration file
+- ✅ Test all components
 
-## 🔌 Hardware Connections
+### **Method 2: Manual Installation**
 
-### Button Connections
-- **Capture Button**: Connect to GPIO pin 18
-  - One terminal to GPIO 18
-  - Other terminal to Ground (GND)
-  - Optional: Add 10kΩ pull-up resistor between GPIO 18 and 3.3V
-
-- **Shutdown Button**: Connect to GPIO pin 3
-  - One terminal to GPIO 3
-  - Other terminal to Ground (GND)
-  - Optional: Add 10kΩ pull-up resistor between GPIO 3 and 3.3V
-
-### Camera Connection
-- Connect the Raspberry Pi Camera Module to the camera connector
-- Ensure the camera is enabled in raspi-config
-
-### Audio Connection
-- Connect speakers or headphones to the 3.5mm audio jack
-- Connect microphone for voice input
-- Or use USB audio device if preferred
-
-## ⚙️ Configuration
-
-### Step 1: Create Configuration File
+#### **Step 1: Clone Repository**
 ```bash
-cp config.example.json config.json
+git clone <repository-url>
+cd RbPi
 ```
 
-### Step 2: Edit Configuration
+#### **Step 2: Install Python Dependencies**
+```bash
+# Upgrade pip
+python -m pip install --upgrade pip
+
+# Install NumPy with BLAS support (for better performance)
+pip install numpy>=1.21.0
+
+# Install core requirements
+pip install -r requirements.txt
+
+# Install additional speech recognition dependencies
+pip install speechrecognition>=3.10.0
+```
+
+#### **Step 3: Install System Dependencies**
+
+**For Ubuntu/Debian/Raspberry Pi:**
+```bash
+sudo apt update
+sudo apt install -y \
+    portaudio19-dev \
+    python3-pyaudio \
+    ffmpeg \
+    flac \
+    alsa-utils \
+    libopenblas-dev \
+    liblapack-dev \
+    libatlas-base-dev \
+    gfortran \
+    build-essential \
+    pkg-config
+
+# Add user to audio group
+sudo usermod -a -G audio $USER
+```
+
+**For macOS:**
+```bash
+# Install Homebrew if not installed
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install dependencies
+brew install portaudio ffmpeg flac openblas
+```
+
+**For Windows:**
+```bash
+# PyAudio should install automatically with pip
+# If you encounter issues, install Visual C++ Build Tools:
+# Download from: https://visualstudio.microsoft.com/visual-cpp-build-tools/
+```
+
+#### **Step 4: Configure System**
+
+**For Raspberry Pi (Audio Optimization):**
+```bash
+# Set real-time priority for audio processes
+echo "@audio - rtprio 95" | sudo tee -a /etc/security/limits.conf
+echo "@audio - memlock unlimited" | sudo tee -a /etc/security/limits.conf
+
+# Set performance CPU governor
+echo performance | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
+
+# Reboot for changes to take effect
+sudo reboot
+```
+
+#### **Step 5: Create Configuration**
+```bash
+# Copy example configuration
+cp config.example.json config.json
+
+# Edit configuration with your API keys
+nano config.json
+```
+
+#### **Step 6: Download Whisper Models**
+```bash
+# Download the recommended model
+python -c "import whisper; whisper.load_model('tiny')"
+```
+
+---
+
+## ⚙️ **Configuration Setup**
+
+### **1. Basic Configuration**
+
+Edit `config.json` with your settings:
+
 ```json
 {
   "openai": {
@@ -151,22 +155,28 @@ cp config.example.json config.json
   "inta": {
     "sample_rate": 16000,
     "chunk_size": 1024,
-    "record_seconds": 5,
-    "silence_threshold": 0.01,
-    "silence_duration": 1.0,
-    "whisper_model": "base"
+    "energy_threshold": 300,
+    "pause_threshold": 0.8,
+    "phrase_threshold": 0.3,
+    "dynamic_energy_threshold": true,
+    "non_speaking_duration": 0.5,
+    "phrase_time_limit": null,
+    "whisper_model": "tiny"
+  },
+  "speech": {
+    "realtime_enabled": true,
+    "word_delay": 0.05,
+    "sentence_delay": 0.2,
+    "chunk_size": 2,
+    "interrupt_on_capture": true,
+    "allow_interrupt": true,
+    "interrupt_threshold": 0.5
   },
   "camera": {
     "width": 1920,
     "height": 1080,
     "quality": 85,
     "auto_focus": true
-  },
-  "speech": {
-    "rate": 150,
-    "volume": 0.9,
-    "voice_id": "",
-    "interrupt_on_capture": false
   },
   "system": {
     "capture_interval": 3,
@@ -183,335 +193,484 @@ cp config.example.json config.json
 }
 ```
 
-### Step 3: Set up API Keys
+### **2. Platform-Specific Settings**
 
-#### OpenAI API Key
-- Get your API key from [OpenAI Platform](https://platform.openai.com/)
-- Add it to the config file, or
-- Set environment variable: `export OPENAI_API_KEY="your-key"`
-- Or create a `.openai_key` file with your key
-
-## 🧪 Testing the System
-
-### Step 1: Test Individual Components
-
-1. **Test camera**
-   ```bash
-   python3 -c "from modules.camera_manager import CameraManager; cm = CameraManager(); print(cm.get_camera_info())"
-   ```
-
-2. **Test speech**
-   ```bash
-   python3 test_gtts.py
-   ```
-
-3. **Test buttons**
-   ```bash
-   python3 modules/button_manager.py
-   ```
-
-### Step 2: Test INTA AI Components
-
-1. **Test ALSA-optimized audio system**
-   ```bash
-   python test_alsa_inta.py
-   ```
-
-2. **Test audio system (fallback)**
-   ```bash
-   python test_audio.py
-   ```
-
-3. **Test OpenAI integration**
-   ```bash
-   python test_openai_integration.py
-   ```
-
-4. **Test INTA AI**
-   ```bash
-   python test_inta_ai.py
-   ```
-
-5. **Interactive demo**
-   ```bash
-   python demo_inta.py
-   ```
-
-### Step 3: Test Complete System
-```bash
-python3 main.py
-```
-
-## 🚀 Running the System
-
-### Basic Usage
-
-1. **Start the system**
-   ```bash
-   python3 main.py
-   ```
-
-2. **Use voice commands**
-   - "Hello INTA, how are you?"
-   - "Take a picture of my surroundings"
-   - "What do you see in front of me?"
-   - "Help me navigate safely"
-
-3. **Use the buttons**
-   - **Capture Button**: Press to capture and analyze surroundings
-   - **Shutdown Button**: Press to safely shutdown the system
-
-### Auto-start on Boot
-
-1. **Create systemd service**
-   ```bash
-   sudo nano /etc/systemd/system/assistive-glasses.service
-   ```
-
-2. **Add service configuration**
-   ```ini
-   [Unit]
-   Description=Assistive Glasses System with INTA AI
-   After=network.target
-
-   [Service]
-   Type=simple
-   User=pi
-   WorkingDirectory=/home/pi/assistive-glasses
-   ExecStart=/home/pi/assistive-glasses/glasses_env/bin/python3 main.py
-   Restart=always
-   RestartSec=5
-   Environment=PYTHONPATH=/home/pi/assistive-glasses
-
-   [Install]
-   WantedBy=multi-user.target
-   ```
-
-3. **Enable and start service**
-   ```bash
-   sudo systemctl daemon-reload
-   sudo systemctl enable assistive-glasses.service
-   sudo systemctl start assistive-glasses.service
-   ```
-
-## 🔧 Configuration Options
-
-### INTA Settings
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `sample_rate` | 16000 | Audio sampling rate (Hz) |
-| `chunk_size` | 1024 | Audio processing chunk size |
-| `record_seconds` | 5 | Maximum recording duration |
-| `silence_threshold` | 0.01 | Silence detection threshold |
-| `silence_duration` | 1.0 | Silence duration to stop recording |
-| `whisper_model` | "base" | Whisper model size |
-
-### Audio Settings
-
-Adjust these for your microphone and environment:
-
+#### **For Raspberry Pi:**
 ```json
-"inta": {
-  "sample_rate": 16000,
-  "silence_threshold": 0.01,
-  "silence_duration": 1.0
+{
+  "inta": {
+    "sample_rate": 16000,
+    "chunk_size": 1024,
+    "energy_threshold": 300,
+    "whisper_model": "tiny"
+  },
+  "speech": {
+    "word_delay": 0.05,
+    "chunk_size": 2
+  }
 }
 ```
 
-**Troubleshooting Audio:**
-- **Low sensitivity**: Increase `silence_threshold` (e.g., 0.05)
-- **Too sensitive**: Decrease `silence_threshold` (e.g., 0.005)
-- **Short recordings**: Increase `silence_duration` (e.g., 2.0)
-- **Long recordings**: Decrease `silence_duration` (e.g., 0.5)
-
-### Performance Optimization
-
-**For Raspberry Pi:**
+#### **For Windows/Desktop:**
 ```json
-"inta": {
-  "whisper_model": "tiny",
-  "sample_rate": 8000,
-  "chunk_size": 512
+{
+  "inta": {
+    "sample_rate": 16000,
+    "chunk_size": 1024,
+    "energy_threshold": 200,
+    "whisper_model": "base"
+  },
+  "speech": {
+    "word_delay": 0.03,
+    "chunk_size": 1
+  }
 }
 ```
 
-**For High-End Systems:**
+#### **For High Accuracy:**
 ```json
-"inta": {
-  "whisper_model": "medium",
-  "sample_rate": 16000,
-  "chunk_size": 2048
+{
+  "inta": {
+    "whisper_model": "base",
+    "energy_threshold": 250,
+    "pause_threshold": 1.0
+  },
+  "speech": {
+    "word_delay": 0.1,
+    "chunk_size": 3
+  }
 }
 ```
 
-## 🔧 Troubleshooting
-
-### Common Issues
-
-1. **Camera not working**
-   - Check if camera is enabled: `sudo raspi-config`
-   - Verify connection: `libcamera-still -t 2000 -o test.jpg`
-   - Check for other processes using camera
-
-2. **Audio not working**
-   - Check audio output: `aplay /usr/share/sounds/alsa/Front_Left.wav`
-   - Set audio output: `sudo raspi-config` > Advanced Options > Audio
-   - Test speech: `python3 test_gtts.py`
-
-3. **Button not responding**
-   - Check GPIO connections
-   - Verify pin numbers in config
-   - Test with multimeter
-
-4. **OpenAI API errors**
-   - Verify API key is correct
-   - Check internet connection
-   - Monitor API usage/limits
-
-5. **PyAudio Installation Fails**
-   ```bash
-   # Ubuntu/Debian
-   sudo apt install portaudio19-dev python3-pyaudio
-
-   # macOS
-   brew install portaudio
-   pip install pyaudio
-
-   # Windows
-   pip install pipwin
-   pipwin install pyaudio
-   ```
-
-6. **Whisper Model Download Issues**
-   ```bash
-   # Manual download
-   python -c "import whisper; whisper.load_model('base')"
-   ```
-
-7. **Microphone Not Detected**
-   ```bash
-   # Test microphone
-   python -c "import pyaudio; p = pyaudio.PyAudio(); print(p.get_device_count())"
-   ```
-
-8. **Audio Processing Issues**
-   ```bash
-   # Test audio system
-   python test_audio.py
-   ```
-
-9. **OpenAI API Compatibility Issues**
-   ```bash
-   # Test OpenAI integration
-   python test_openai_integration.py
-   ```
-
-### Debug Mode
-
-Run with debug logging:
-```bash
-python3 main.py --debug
+#### **For Fast Response:**
+```json
+{
+  "inta": {
+    "whisper_model": "tiny",
+    "energy_threshold": 200,
+    "pause_threshold": 0.5
+  },
+  "speech": {
+    "word_delay": 0.02,
+    "chunk_size": 1
+  }
+}
 ```
-
-### Log Files
-
-- System logs: `glasses_system.log`
-- INTA AI logs: `inta_test.log`
-- Analysis history: `analysis_log.txt`
-- Configuration: `config.json`
-
-## 🔒 Safety and Accessibility
-
-### Important Notes
-- Always test thoroughly before relying on the system
-- Have backup navigation methods available
-- Regular system updates and maintenance
-- Consider user-specific customizations
-
-### Customization
-- Adjust speech rate and volume for user preference
-- Modify prompts for specific use cases
-- Add custom voice commands
-- Implement different analysis modes
-
-## 🚀 Optimization Tips
-
-### Performance
-- Use lower camera resolution for faster processing
-- Adjust speech rate for better comprehension
-- Implement local caching for common responses
-- Use appropriate Whisper model size for your hardware
-
-### Power Management
-- Use efficient power supply
-- Implement sleep modes between captures
-- Consider battery optimization settings
-
-### Audio Quality
-- Use external USB audio device for better quality
-- Adjust volume levels in configuration
-- Consider using Bluetooth audio
-- Position microphone for optimal voice capture
-
-## 🔄 Maintenance
-
-### Regular Tasks
-- Update system packages: `sudo apt update && sudo apt upgrade`
-- Clean up log files: `rm -f *.log`
-- Check disk space: `df -h`
-- Monitor system resources: `htop`
-
-### Updates
-- Pull latest code: `git pull origin main`
-- Update dependencies: `pip install -r requirements.txt --upgrade`
-- Test system after updates
-
-## 📚 Additional Resources
-
-### Documentation
-- [Raspberry Pi Documentation](https://www.raspberrypi.org/documentation/)
-- [OpenAI API Documentation](https://platform.openai.com/docs)
-- [Whisper Documentation](https://github.com/openai/whisper)
-
-### Community Support
-- Check GitHub issues for known problems
-- Join Raspberry Pi forums
-- Participate in accessibility technology communities
-
-## 🆘 Getting Help
-
-### Before Asking for Help
-1. Check log files for error messages
-2. Review this setup guide thoroughly
-3. Test individual components separately
-4. Verify hardware connections
-5. Check internet connectivity
-
-### Support Channels
-- GitHub Issues: Report bugs and request features
-- Documentation: Review setup and troubleshooting guides
-- Community Forums: Ask questions and share experiences
-
-## 📄 Legal and Privacy
-
-### Important Considerations
-- Images are processed by OpenAI's servers
-- Review OpenAI's privacy policy
-- Consider data retention policies
-- Implement local processing if privacy is critical
-
-### Compliance
-- Check local regulations for assistive devices
-- Consider accessibility standards
-- Review data protection requirements
-- Ensure compliance with medical device regulations if applicable
 
 ---
 
-**Setup Status**: ✅ Complete and Tested  
-**INTA AI Status**: ✅ Fully Integrated  
-**Documentation Status**: ✅ Comprehensive  
-**Support Status**: ✅ Available  
+## 🧪 **Testing Installation**
 
-The assistive glasses system with INTA AI is now ready for use! 
+### **1. Test Individual Components**
+
+#### **Test Speech Recognition:**
+```bash
+# Test microphone detection
+python -c "import speech_recognition as sr; print(sr.Microphone.list_microphone_names())"
+
+# Test Whisper model
+python -c "import whisper; model = whisper.load_model('tiny'); print('Whisper OK')"
+```
+
+#### **Test Audio System:**
+```bash
+# Test PyAudio
+python -c "import pyaudio; p = pyaudio.PyAudio(); p.terminate(); print('PyAudio OK')"
+
+# Test gTTS
+python -c "from gtts import gTTS; print('gTTS OK')"
+```
+
+#### **Test OpenAI Integration:**
+```bash
+# Test OpenAI client
+python -c "import openai; print('OpenAI OK')"
+```
+
+### **2. Test System Integration**
+
+#### **Test Microphone Access:**
+```python
+import speech_recognition as sr
+
+# List available microphones
+mics = sr.Microphone.list_microphone_names()
+print(f"Found {len(mics)} microphones:")
+for i, mic in enumerate(mics):
+    print(f"  {i}: {mic}")
+
+# Test default microphone
+mic = sr.Microphone()
+print(f"Default microphone: {mics[mic.device_index]}")
+```
+
+#### **Test Speech Recognition:**
+```python
+import speech_recognition as sr
+
+# Initialize recognizer and microphone
+recognizer = sr.Recognizer()
+microphone = sr.Microphone()
+
+# Test ambient noise adjustment
+with microphone as source:
+    recognizer.adjust_for_ambient_noise(source, duration=1)
+print(f"Energy threshold set to: {recognizer.energy_threshold}")
+```
+
+#### **Test Real-time Speech:**
+```python
+from modules.speech_manager import SpeechManager
+
+# Test speech synthesis
+speech = SpeechManager()
+speech.speak("Hello, this is a test of the speech system.")
+```
+
+---
+
+## 🔧 **Hardware Setup (Raspberry Pi)**
+
+### **1. Camera Connection**
+```bash
+# Enable camera in raspi-config
+sudo raspi-config
+# Navigate to: Interface Options → Camera → Enable
+
+# Test camera
+vcgencmd get_camera
+# Should return: supported=1 detected=1
+```
+
+### **2. Button Wiring**
+```
+Capture Button:
+- GPIO 18 → Button → Ground
+
+Shutdown Button:
+- GPIO 3 → Button → Ground
+
+Status LED (optional):
+- GPIO 24 → LED → Resistor → Ground
+```
+
+### **3. Audio Setup**
+```bash
+# Check audio devices
+aplay -l
+arecord -l
+
+# Test microphone
+arecord -d 5 test.wav
+aplay test.wav
+
+# Adjust microphone levels
+alsamixer
+```
+
+---
+
+## 🚨 **Troubleshooting**
+
+### **Common Installation Issues**
+
+#### **1. PyAudio Installation Fails**
+```bash
+# Ubuntu/Debian
+sudo apt install portaudio19-dev python3-pyaudio
+
+# macOS
+brew install portaudio
+pip install pyaudio
+
+# Windows
+pip install pipwin
+pipwin install pyaudio
+```
+
+#### **2. NumPy Installation Issues**
+```bash
+# Install BLAS libraries first
+sudo apt install libopenblas-dev liblapack-dev gfortran
+
+# Then install NumPy
+pip install numpy --no-build-isolation
+```
+
+#### **3. Whisper Model Download Issues**
+```bash
+# Manual download
+python -c "import whisper; whisper.load_model('tiny')"
+
+# Check available models
+python -c "import whisper; print(whisper.available_models())"
+```
+
+#### **4. Microphone Not Detected**
+```bash
+# Check available devices
+python -c "import speech_recognition as sr; print(sr.Microphone.list_microphone_names())"
+
+# Test microphone access
+python -c "import speech_recognition as sr; mic = sr.Microphone(); print('Microphone OK')"
+```
+
+### **Performance Issues**
+
+#### **System Too Slow:**
+```json
+{
+  "inta": {
+    "whisper_model": "tiny",
+    "chunk_size": 512
+  },
+  "speech": {
+    "word_delay": 0.02,
+    "chunk_size": 1
+  }
+}
+```
+
+#### **High CPU Usage:**
+- Use smaller Whisper model
+- Reduce sample rate
+- Close unnecessary applications
+- Check for background processes
+
+#### **Audio Quality Issues:**
+```json
+{
+  "inta": {
+    "sample_rate": 22050,
+    "energy_threshold": 400
+  },
+  "speech": {
+    "word_delay": 0.1,
+    "chunk_size": 3
+  }
+}
+```
+
+### **Speech Recognition Issues**
+
+#### **Low Recognition Accuracy:**
+```json
+{
+  "inta": {
+    "energy_threshold": 150,
+    "pause_threshold": 1.0,
+    "whisper_model": "base"
+  }
+}
+```
+
+#### **Background Noise Issues:**
+```python
+# Increase ambient noise adjustment duration
+recognizer.adjust_for_ambient_noise(source, duration=3)
+```
+
+---
+
+## 📊 **Performance Optimization**
+
+### **Raspberry Pi Optimizations**
+
+#### **1. System Optimizations**
+```bash
+# Set performance CPU governor
+echo performance | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
+
+# Disable unnecessary services
+sudo systemctl disable bluetooth
+sudo systemctl disable wifi-powersave
+
+# Increase GPU memory
+# Add to /boot/config.txt:
+gpu_mem=128
+```
+
+#### **2. Audio Optimizations**
+```bash
+# Real-time priority for audio
+echo "@audio - rtprio 95" | sudo tee -a /etc/security/limits.conf
+echo "@audio - memlock unlimited" | sudo tee -a /etc/security/limits.conf
+
+# Optimize ALSA settings
+# Add to /etc/asound.conf:
+pcm.lowlatency {
+    type plug
+    slave.pcm "hw:0,0"
+    slave.rate 8000
+    slave.channels 1
+    slave.format S16_LE
+    slave.period_size 512
+    slave.buffer_size 2048
+}
+```
+
+#### **3. Memory Optimizations**
+```bash
+# Increase swap space
+sudo dphys-swapfile swapoff
+sudo nano /etc/dphys-swapfile
+# Set CONF_SWAPSIZE=2048
+sudo dphys-swapfile setup
+sudo dphys-swapfile swapon
+```
+
+### **Cross-Platform Optimizations**
+
+#### **Windows Optimizations:**
+- Disable unnecessary startup programs
+- Set Python process priority to high
+- Use SSD for better I/O performance
+
+#### **macOS Optimizations:**
+- Disable unnecessary background processes
+- Use external microphone for better quality
+- Ensure adequate cooling
+
+---
+
+## 🔒 **Security Considerations**
+
+### **API Key Security**
+```bash
+# Store API keys securely
+export OPENAI_API_KEY="your-key-here"
+
+# Or use environment variables in config
+{
+  "openai": {
+    "api_key": "${OPENAI_API_KEY}"
+  }
+}
+```
+
+### **Network Security**
+- Use HTTPS for all API communications
+- Consider VPN for additional security
+- Monitor API usage and costs
+
+### **Data Privacy**
+- Images are processed by OpenAI's API
+- No images are stored permanently by default
+- Review OpenAI's privacy policy
+- Consider local processing for sensitive use cases
+
+---
+
+## 📱 **Mobile/Remote Setup**
+
+### **SSH Access (Raspberry Pi)**
+```bash
+# Enable SSH
+sudo systemctl enable ssh
+sudo systemctl start ssh
+
+# Connect remotely
+ssh pi@raspberry-pi-ip
+```
+
+### **Remote Development**
+```bash
+# Use VS Code Remote Development
+# Install Remote-SSH extension
+# Connect to Raspberry Pi via SSH
+```
+
+### **Headless Operation**
+```bash
+# Run system as service
+sudo nano /etc/systemd/system/inta-ai.service
+
+[Unit]
+Description=INTA AI Assistant
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/RbPi
+ExecStart=/usr/bin/python3 main.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+
+# Enable and start service
+sudo systemctl enable inta-ai
+sudo systemctl start inta-ai
+```
+
+---
+
+## 🎯 **Quick Start Checklist**
+
+- [ ] **Repository cloned** and dependencies installed
+- [ ] **OpenAI API key** configured in `config.json`
+- [ ] **Microphone** detected and working
+- [ ] **Whisper model** downloaded successfully
+- [ ] **Audio output** tested and working
+- [ ] **Camera** connected and enabled (Raspberry Pi)
+- [ ] **Buttons** wired correctly (optional)
+- [ ] **System optimized** for performance
+- [ ] **Test run** completed successfully
+
+---
+
+## 🚀 **Next Steps**
+
+### **1. First Run**
+```bash
+# Start the system
+python main.py
+
+# Test voice commands:
+# - "Hello INTA"
+# - "What time is it?"
+# - "Take a picture"
+```
+
+### **2. Customization**
+- Add custom commands in `modules/inta_ai_manager.py`
+- Adjust speech settings in `config.json`
+- Configure hardware pins for your setup
+
+### **3. Integration**
+- Connect to smart home systems
+- Integrate with navigation apps
+- Add emergency contact features
+
+---
+
+## 📞 **Support**
+
+### **Getting Help**
+1. Check the troubleshooting section above
+2. Review log files for error messages
+3. Test individual components separately
+4. Verify hardware connections
+
+### **Useful Commands**
+```bash
+# Check system status
+python -c "import sys; print(f'Python {sys.version}')"
+
+# Check available packages
+pip list | grep -E "(openai|speech|whisper|pyaudio)"
+
+# Monitor system resources
+htop
+iostat 1
+
+# Check audio devices
+aplay -l
+arecord -l
+```
+
+---
+
+**Your INTA AI system is now ready for intelligent assistive glasses applications!** 🎉✨ 
