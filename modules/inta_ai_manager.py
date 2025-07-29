@@ -13,6 +13,7 @@ import tempfile
 import numpy as np
 from typing import Dict, Any, Optional, Callable
 from pathlib import Path
+import modules.sensor_manager as sensor_manager
 
 # Speech recognition imports (primary method)
 try:
@@ -124,6 +125,11 @@ class IntaAIManager:
         self._initialize_speech_recognition()
         self._initialize_vad()
         self._initialize_whisper()
+        
+        # Start sensor monitor for continuous data
+        sensor_manager.sensor_monitor.start()
+        self._navigation_monitoring = False
+        self._navigation_thread = None
         
         self.logger.info("INTA AI Manager initialized")
     
@@ -615,6 +621,10 @@ class IntaAIManager:
         elif any(word in text_lower for word in ["status", "health", "system"]):
             return self.execute_function("status")
         elif any(word in text_lower for word in ["help", "assist", "guide"]):
+            # Navigation-related help
+            if any(phrase in text_lower for phrase in [
+                "help walking", "navigate", "navigation", "safe to walk", "obstacle", "path like", "walk forward", "is it safe", "what's the path", "help me navigate"]):
+                return self.execute_function("navigate")
             return self.execute_function("help")
         elif any(word in text_lower for word in ["volume up", "louder"]):
             return self.execute_function("volume_up")
@@ -628,7 +638,9 @@ class IntaAIManager:
             return self.execute_function("emergency")
         elif any(word in text_lower for word in ["shutdown", "turn off", "exit", "quit", "stop"]):
             return self.execute_function("shutdown")
-        
+        elif any(phrase in text_lower for phrase in [
+            "distance in front", "how far is", "obstacle ahead", "object ahead", "detect obstacle", "measure distance", "is it clear ahead", "is it safe to walk forward", "what's the path like", "i need help walking", "help me navigate"]):
+            return self.execute_function("navigate")
         return None
     
     def _understand_contextual_command(self, text: str) -> Optional[str]:
@@ -867,11 +879,24 @@ class IntaAIManager:
             elif function_name == "weather":
                 return "I'm sorry, I don't have access to real-time weather data yet."
             
-            elif function_name == "distance":
-                return "Distance sensor is active. No obstacles detected within safe range."
-            
-            elif function_name == "obstacles":
-                return "Obstacle detection system is running. All clear ahead."
+            elif function_name in ["distance", "obstacles", "navigate"]:
+                # Start continuous navigation monitoring for 30 seconds
+                self.start_navigation_monitoring()
+                import threading
+                def stop_nav():
+                    import time
+                    time.sleep(30)
+                    self.stop_navigation_monitoring()
+                threading.Thread(target=stop_nav, daemon=True).start()
+                distance = sensor_manager.sensor_monitor.get_latest_distance()
+                if distance is None:
+                    return "I'm sorry, I couldn't get a reading from the distance sensors."
+                if distance < 50:
+                    return f"Warning! Obstacle very close, at {distance} centimeters. I will keep monitoring and warn you if anything changes."
+                elif distance < 150:
+                    return f"Caution, an object is ahead at about {distance} centimeters. I will keep monitoring and warn you if anything changes."
+                else:
+                    return "The path ahead appears to be clear. I will keep monitoring and warn you if anything changes."
             
             elif function_name == "capture":
                 return "I'll capture and analyze your surroundings now."
@@ -885,6 +910,38 @@ class IntaAIManager:
         except Exception as e:
             self.logger.error(f"Error executing function {function_name}: {str(e)}")
             return f"Error executing {function_name}"
+    
+    def start_navigation_monitoring(self):
+        if self._navigation_monitoring:
+            return
+        self._navigation_monitoring = True
+        import threading
+        self._navigation_thread = threading.Thread(target=self._navigation_monitor_loop, daemon=True)
+        self._navigation_thread.start()
+
+    def stop_navigation_monitoring(self):
+        self._navigation_monitoring = False
+        if self._navigation_thread:
+            self._navigation_thread.join(timeout=2)
+
+    def _navigation_monitor_loop(self):
+        last_warning = None
+        while self._navigation_monitoring:
+            distance = sensor_manager.sensor_monitor.get_latest_distance()
+            if distance is not None:
+                if distance < 50:
+                    warning = f"Warning! Obstacle very close, at {distance} centimeters."
+                elif distance < 150:
+                    warning = f"Caution, an object is ahead at about {distance} centimeters."
+                else:
+                    warning = None
+                if warning and warning != last_warning:
+                    self._emit_response(warning)
+                    last_warning = warning
+                elif not warning:
+                    last_warning = None
+            import time
+            time.sleep(1)
     
     def get_status(self) -> Dict[str, Any]:
         """Get system status"""
