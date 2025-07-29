@@ -1,34 +1,34 @@
 # INTA AI - Intelligent Assistive Glasses System
 
-## 🎯 **Overview**
+## **Overview**
 
 INTA AI is an intelligent voice assistant designed for assistive glasses, providing real-time speech recognition, computer vision analysis, and natural conversation capabilities. Built with Raspberry Pi optimization and cross-platform compatibility.
 
 ---
 
-## ✨ **Key Features**
+## **Key Features**
 
-### **🎤 Advanced Speech Recognition**
+### **Advanced Speech Recognition**
 - **Wake Word System**: INTA responds only when called by name ("INTA", "Hey INTA", etc.)
 - **Speech Recognition Library**: Cross-platform compatibility with automatic microphone detection
 - **Whisper Integration**: Offline speech recognition with multiple model options
 - **Real-time Processing**: Continuous listening with voice activity detection
 - **Ambient Noise Adjustment**: Automatic sensitivity adjustment for different environments
 
-### **🤖 AI-Powered Conversations**
+### **AI-Powered Conversations**
 - **OpenAI Integration**: Natural language processing with GPT models
 - **Contextual Command Understanding**: Understands natural language variations and asks for confirmation
 - **Real-time Speech Synthesis**: Word-by-word speech generation for natural conversations
 - **Command Recognition**: Built-in commands for system control and assistance
 - **Context Awareness**: Maintains conversation history for better interactions
 
-### **📸 Computer Vision**
+### **Computer Vision**
 - **Raspberry Pi Camera**: High-quality image capture and analysis
 - **OpenAI Vision API**: Advanced image description and object recognition
 - **Real-time Analysis**: Instant environment assessment and description
 - **Text Recognition**: OCR capabilities for reading text in images
 
-### **⚡ Performance Optimizations**
+### **Performance Optimizations**
 - **Low Latency Audio**: Optimized for Raspberry Pi with configurable settings
 - **Resource Management**: Efficient CPU and memory usage
 - **Cross-platform Support**: Works on Windows, macOS, and Linux
@@ -36,7 +36,7 @@ INTA AI is an intelligent voice assistant designed for assistive glasses, provid
 
 ---
 
-## 🏗️ **System Architecture**
+##   **System Architecture**
 
 ### **Core Components**
 
@@ -54,12 +54,12 @@ INTA AI is an intelligent voice assistant designed for assistive glasses, provid
 ```
 Microphone → Speech Recognition → Command Processing → AI Response → Text-to-Speech
      ↓              ↓                    ↓              ↓              ↓
-  PyAudio    Google/Whisper        OpenAI GPT      Real-time      Audio Output
+ Pirewire        Whisper            OpenAI GPT      Real-time      Audio Output
 ```
 
 ---
 
-## 🚀 **Quick Start**
+## **Quick Start**
 
 ### **1. Installation**
 ```bash
@@ -87,7 +87,7 @@ python main.py
 
 ---
 
-## ⚙️ **Configuration Guide**
+## **Configuration Guide**
 
 ### **OpenAI Settings**
 ```json
@@ -146,7 +146,7 @@ python main.py
 
 ---
 
-## 🎙️ **Speech Recognition System**
+## **Speech Recognition System**
 
 ### **Features**
 - **Wake Word Activation**: INTA only responds when called by name ("INTA", "Hey INTA", etc.)
@@ -194,7 +194,7 @@ python main.py
 
 ---
 
-## 🔔 **Wake Word System**
+## **Wake Word System**
 
 ### **How It Works**
 - **Wake Word Detection**: INTA continuously listens for its name ("INTA", "Hey INTA", etc.)
@@ -224,7 +224,7 @@ python main.py
 
 ---
 
-## 🎙️ **Real-time Speech System**
+## **Real-time Speech System**
 
 ### **How It Works**
 - **Word-by-Word Generation**: Speaks each word as it's generated
@@ -257,7 +257,7 @@ python main.py
 
 ---
 
-## 🧠 **Contextual Command Understanding**
+## **Contextual Command Understanding**
 
 ### **How It Works**
 - **Natural Language Processing**: INTA understands commands even when you don't use exact keywords
@@ -304,7 +304,7 @@ python main.py
 
 ---
 
-## 🎯 **Custom Commands**
+## **Custom Commands**
 
 ### **Wake Word Usage**
 - **"INTA"** - Basic wake word
@@ -359,210 +359,4 @@ def process_command(self, text: str) -> str:
     elif "weather" in text_lower:
         return self.execute_function("weather")
     # ADD MORE COMMAND RECOGNITION HERE
-```
-
----
-
-## 🔧 **Performance Optimization**
-
-### **Raspberry Pi Optimizations**
-- **8kHz Sample Rate**: Optimized for Pi's audio hardware
-- **Small Chunk Sizes**: Reduced latency
-- **Tiny Whisper Model**: Fastest processing
-- **Real-time Priority**: Audio processes get high priority
-
-### **System Optimizations**
-```bash
-# Real-time priority for audio processes
-@audio - rtprio 95
-@audio - memlock unlimited
-
-# Performance CPU governor
-echo performance > /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
-```
-
-### **Memory Management**
-- **Efficient Buffers**: Minimal memory usage
-- **Streaming Processing**: No large audio buffers
-- **Resource Cleanup**: Automatic cleanup of temporary files
-
----
-
-## 🧪 **Testing**
-
-### **Test Speech Recognition**
-```bash
-# Test microphone detection
-python -c "import speech_recognition as sr; print(sr.Microphone.list_microphone_names())"
-
-# Test Whisper model
-python -c "import whisper; model = whisper.load_model('tiny'); print('Whisper OK')"
-```
-
-### **Test Audio System**
-```bash
-# Test PyAudio
-python -c "import pyaudio; p = pyaudio.PyAudio(); p.terminate(); print('PyAudio OK')"
-
-# Test gTTS
-python -c "from gtts import gTTS; print('gTTS OK')"
-```
-
-### **Test OpenAI Integration**
-```bash
-# Test OpenAI client
-python -c "import openai; print('OpenAI OK')"
-```
-
----
-
-## 🚨 **Troubleshooting**
-
-### **Speech Recognition Issues**
-
-#### **Microphone Not Detected:**
-```bash
-# Check available microphones
-python -c "import speech_recognition as sr; print(sr.Microphone.list_microphone_names())"
-
-# Test microphone access
-python -c "import speech_recognition as sr; mic = sr.Microphone(); print('Microphone OK')"
-```
-
-#### **Low Recognition Accuracy:**
-```json
-{
-  "inta": {
-      "energy_threshold": 150,
-      "pause_threshold": 1.0,
-      "whisper_model": "base"
-  }
-}
-```
-
-#### **Background Noise Issues:**
-```python
-# Increase ambient noise adjustment duration
-recognizer.adjust_for_ambient_noise(source, duration=3)
-```
-
-### **Performance Issues**
-
-#### **System Too Slow:**
-```json
-{
-  "inta": {
-      "whisper_model": "tiny",
-      "chunk_size": 512
-  },
-  "speech": {
-      "word_delay": 0.02,
-      "chunk_size": 1
-  }
-}
-```
-
-#### **High CPU Usage:**
-- Use smaller Whisper model
-- Reduce sample rate
-- Close unnecessary applications
-- Check for background processes
-
-### **Audio Quality Issues**
-
-#### **Poor Audio Quality:**
-```json
-{
-  "inta": {
-      "sample_rate": 22050,
-      "energy_threshold": 400
-  },
-  "speech": {
-      "word_delay": 0.1,
-      "chunk_size": 3
-  }
-}
-```
-
-#### **Audio Cuts Out:**
-- Check microphone permissions
-- Verify audio device settings
-- Restart the application
-- Check system audio settings
-
----
-
-## 📊 **Performance Comparison**
-
-### **Speech Recognition Performance**
-| Method | Latency | Accuracy | Resource Usage |
-|--------|---------|----------|----------------|
-| **Google Speech** | 100-200ms | 95%+ | Low |
-| **Whisper Tiny** | 500-1000ms | 85% | Very Low |
-| **Whisper Base** | 1000-2000ms | 90% | Low |
-| **Whisper Small** | 2000-4000ms | 95% | Medium |
-
-### **Real-time Speech Performance**
-| Setting | Response Time | Naturalness | Interruptibility |
-|---------|---------------|-------------|------------------|
-| **Traditional** | 3-5 seconds | ❌ Robotic | No |
-| **Real-time** | 0.1 seconds | ✅ Natural | Yes |
-
----
-
-## 🔮 **Future Enhancements**
-
-### **Planned Features**
-- **Hardware Acceleration**: GPU-accelerated audio processing
-- **Neural Network VAD**: More accurate speech detection
-- **Streaming Whisper**: Real-time transcription
-- **Multi-language Support**: Automatic language detection
-- **Noise Cancellation**: Real-time noise reduction
-- **Speaker Recognition**: Identify different users
-
-### **Advanced Features**
-- **Emotion Detection**: Analyze speech patterns
-- **Context Memory**: Long-term conversation memory
-- **Custom Skills**: Plugin system for custom functions
-- **Cloud Integration**: Remote processing capabilities
-- **Mobile App**: Companion mobile application
-
----
-
-## 📚 **References**
-
-- [Speech Recognition Library](https://pypi.org/project/SpeechRecognition/)
-- [OpenAI Whisper](https://github.com/openai/whisper)
-- [OpenAI API](https://platform.openai.com/docs)
-- [Raspberry Pi Camera](https://picamera.readthedocs.io/)
-- [PyAudio](https://people.csail.mit.edu/hubert/pyaudio/)
-- [gTTS](https://gtts.readthedocs.io/)
-
----
-
-## 🤝 **Contributing**
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
----
-
-## 📄 **License**
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
----
-
-## 🎉 **Support**
-
-For support and questions:
-- Check the troubleshooting section
-- Review the configuration guide
-- Test individual components
-- Check system requirements
-
-**Your INTA AI system is now ready for intelligent assistive glasses applications!** 🚀✨
 
