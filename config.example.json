@@ -1,55 +1,61 @@
 {
-  "openai": {
-      "api_key": "your-openai-api-key-here",
-      "model": "gpt-4o-mini",
-      "max_tokens": 300,
-      "temperature": 0.3
-  },
-
-  "inta": {
-      "sample_rate": 16000,
-      "chunk_size": 1024,
-      "energy_threshold": 300,
-      "pause_threshold": 0.8,
-      "phrase_threshold": 0.3,
-      "dynamic_energy_threshold": true,
-      "non_speaking_duration": 0.5,
+    "openai": {
+        "api_key": "your-openai-api-key-here",
+        "model": "gpt-4o-mini",
+        "max_tokens": 300,
+        "temperature": 0.3
+    },
+  
+    "inta": {
+        "sample_rate": 16000,
+        "chunk_size": 1024,
+        "energy_threshold": 300,
+        "pause_threshold": 0.8,
+        "phrase_threshold": 0.3,
+        "dynamic_energy_threshold": true,
+        "non_speaking_duration": 0.5,
         "phrase_time_limit": null,
         "microphone_volume": 0.8,
-      "whisper_model": "tiny"
-  },
-  
-  "camera": {
-      "width": 1920,
-      "height": 1080,
-      "quality": 85,
-      "auto_focus": true
-  },
-  
-  "speech": {
-      "rate": 250,
-      "volume": 0.9,
-      "voice_id": "",
-      "interrupt_on_capture": true,
-      "allow_interrupt": true,
-      "interrupt_threshold": 0.5,
-      "realtime_enabled": true,
-      "word_delay": 0.05,
-      "sentence_delay": 0.2,
-      "chunk_size": 2
-  },
-  
-  "system": {
-      "capture_interval": 3,
-      "log_level": "INFO",
-      "save_images": true,
-      "save_analysis": true
-  },
-  
-  "hardware": {
-      "button_pin": 18,
-      "led_pin": 24,
-      "shutdown_pin": 3,
-      "debounce_time": 0.2
-  }
-} 
+        "whisper_model": "tiny",
+        "wake_word": "inta",
+        "wake_word_confidence": 0.7,
+        "wake_word_timeout": 5.0,
+        "contextual_mode": true,
+        "confirmation_required": true,
+        "confirmation_timeout": 10.0
+    },
+    
+    "camera": {
+        "width": 1920,
+        "height": 1080,
+        "quality": 85,
+        "auto_focus": true
+    },
+    
+    "speech": {
+        "rate": 250,
+        "volume": 0.9,
+        "voice_id": "",
+        "interrupt_on_capture": true,
+        "allow_interrupt": true,
+        "interrupt_threshold": 0.5,
+        "realtime_enabled": true,
+        "word_delay": 0.05,
+        "sentence_delay": 0.2,
+        "chunk_size": 2
+    },
+    
+    "system": {
+        "capture_interval": 3,
+        "log_level": "INFO",
+        "save_images": true,
+        "save_analysis": true
+    },
+    
+    "hardware": {
+        "button_pin": 18,
+        "led_pin": 24,
+        "shutdown_pin": 3,
+        "debounce_time": 0.2
+    }
+  } 

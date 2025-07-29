@@ -56,6 +56,20 @@ class IntaAIManager:
         self.running = False
         self.listening = False
         
+        # Wake word system
+        self.wake_word = config.get('inta', {}).get('wake_word', 'inta').lower()
+        self.wake_word_detected = False
+        self.wake_word_confidence = config.get('inta', {}).get('wake_word_confidence', 0.7)
+        self.wake_word_timeout = config.get('inta', {}).get('wake_word_timeout', 5.0)  # seconds
+        self.last_wake_time = 0
+        
+        # Contextual understanding
+        self.contextual_mode = config.get('inta', {}).get('contextual_mode', True)
+        self.confirmation_required = config.get('inta', {}).get('confirmation_required', True)
+        self.pending_confirmation = None
+        self.confirmation_timeout = config.get('inta', {}).get('confirmation_timeout', 10.0)  # seconds
+        self.last_confirmation_time = 0
+        
         # Audio settings
         self.sample_rate = config.get('inta', {}).get('sample_rate', 16000)
         self.chunk_size = config.get('inta', {}).get('chunk_size', 1024)
@@ -439,16 +453,66 @@ class IntaAIManager:
             if text and text.strip():
                 self.logger.info(f"Recognized speech: {text}")
                 
-                # Process the command
-                response = self.process_command(text)
+                # Check for wake word first
+                if self._check_wake_word(text):
+                    self.wake_word_detected = True
+                    self.last_wake_time = time.time()
+                    self.logger.info("Wake word detected! INTA is now listening.")
+                    self._emit_response("Yes, I'm listening. How can I help you?")
+                    return
                 
-                # Emit response
-                self._emit_response(response)
+                # Check if we're in wake word mode
+                if self.wake_word_detected:
+                    # Check if wake word timeout has expired
+                    if time.time() - self.last_wake_time > self.wake_word_timeout:
+                        self.wake_word_detected = False
+                        self.logger.debug("Wake word timeout expired")
+                        return
+                    
+                    # Process the command
+                    response = self.process_command(text)
+                    
+                    # Emit response
+                    self._emit_response(response)
+                    
+                    # Reset wake word detection after processing
+                    self.wake_word_detected = False
+                else:
+                    self.logger.debug("Wake word not detected, ignoring speech")
+                    
             else:
                 self.logger.debug("No speech detected or empty text")
                 
         except Exception as e:
             self.logger.error(f"Error processing audio: {str(e)}")
+    
+    def _check_wake_word(self, text: str) -> bool:
+        """Check if the wake word is present in the text"""
+        if not text:
+            return False
+        
+        text_lower = text.lower().strip()
+        
+        # Check for exact wake word match
+        if self.wake_word in text_lower:
+            return True
+        
+        # Check for variations of the wake word
+        wake_variations = [
+            self.wake_word,
+            f"hey {self.wake_word}",
+            f"hello {self.wake_word}",
+            f"hi {self.wake_word}",
+            f"okay {self.wake_word}",
+            f"listen {self.wake_word}",
+            f"attention {self.wake_word}"
+        ]
+        
+        for variation in wake_variations:
+            if variation in text_lower:
+                return True
+        
+        return False
     
     def _speech_to_text(self, audio) -> Optional[str]:
         """Convert speech to text using multiple methods"""
@@ -491,44 +555,40 @@ class IntaAIManager:
         return None
     
     def process_command(self, text: str) -> str:
-        """Process user command and generate response"""
+        """Process user command and generate response with contextual understanding"""
         try:
             text_lower = text.lower().strip()
+            
+            # Check for confirmation responses first
+            if self.pending_confirmation:
+                if any(word in text_lower for word in ["yes", "correct", "right", "okay", "ok", "sure", "do it", "execute"]):
+                    # Execute the pending command
+                    command = self.pending_confirmation
+                    self.pending_confirmation = None
+                    self.last_confirmation_time = 0
+                    return self._execute_confirmed_command(command)
+                elif any(word in text_lower for word in ["no", "wrong", "incorrect", "cancel", "stop", "don't"]):
+                    # Cancel the pending command
+                    self.pending_confirmation = None
+                    self.last_confirmation_time = 0
+                    return "Command cancelled. How else can I help you?"
+                else:
+                    # Still waiting for confirmation, remind user
+                    return f"I'm still waiting for confirmation. Did you mean: {self.pending_confirmation['description']}? Say yes or no."
             
             # Add to conversation history
             self._add_to_history("user", text)
             
-            # Check for specific commands first
-            if any(word in text_lower for word in ["time", "clock", "hour"]):
-                return self.execute_function("time")
-            elif any(word in text_lower for word in ["date", "day", "month", "year"]):
-                return self.execute_function("date")
-            elif any(word in text_lower for word in ["joke", "funny", "humor"]):
-                return self.execute_function("joke")
-            elif any(word in text_lower for word in ["status", "health", "system"]):
-                return self.execute_function("status")
-            elif any(word in text_lower for word in ["help", "assist", "guide"]):
-                return self.execute_function("help")
-            elif any(word in text_lower for word in ["volume up", "louder"]):
-                return self.execute_function("volume_up")
-            elif any(word in text_lower for word in ["volume down", "quieter"]):
-                return self.execute_function("volume_down")
-            elif any(word in text_lower for word in ["mute", "silence"]):
-                return self.execute_function("mute")
-            elif any(word in text_lower for word in ["unmute", "sound on"]):
-                return self.execute_function("unmute")
-            elif any(word in text_lower for word in ["emergency", "sos", "help me"]):
-                return self.execute_function("emergency")
-            elif any(word in text_lower for word in ["weather", "temperature", "forecast"]):
-                return self.execute_function("weather")
-            elif any(word in text_lower for word in ["distance", "obstacle", "sensor"]):
-                return self.execute_function("distance")
-            elif any(word in text_lower for word in ["obstacles", "detection", "clear"]):
-                return self.execute_function("obstacles")
-            elif any(word in text_lower for word in ["capture", "picture", "photo", "image", "see", "look"]):
-                return self.execute_function("capture")
-            elif any(word in text_lower for word in ["shutdown", "turn off", "exit", "quit", "stop"]):
-                return self.execute_function("shutdown")
+            # Check for specific commands first (exact matches)
+            command_result = self._check_exact_commands(text_lower)
+            if command_result:
+                return command_result
+            
+            # Use contextual understanding for ambiguous commands
+            if self.contextual_mode:
+                contextual_result = self._understand_contextual_command(text)
+                if contextual_result:
+                    return contextual_result
             
             # Query OpenAI for general conversation
             response = self._query_openai(text)
@@ -543,6 +603,136 @@ class IntaAIManager:
         except Exception as e:
             self.logger.error(f"Error processing command: {str(e)}")
             return "I encountered an error processing your request."
+    
+    def _check_exact_commands(self, text_lower: str) -> Optional[str]:
+        """Check for exact command matches"""
+        if any(word in text_lower for word in ["time", "clock", "hour"]):
+            return self.execute_function("time")
+        elif any(word in text_lower for word in ["date", "day", "month", "year"]):
+            return self.execute_function("date")
+        elif any(word in text_lower for word in ["joke", "funny", "humor"]):
+            return self.execute_function("joke")
+        elif any(word in text_lower for word in ["status", "health", "system"]):
+            return self.execute_function("status")
+        elif any(word in text_lower for word in ["help", "assist", "guide"]):
+            return self.execute_function("help")
+        elif any(word in text_lower for word in ["volume up", "louder"]):
+            return self.execute_function("volume_up")
+        elif any(word in text_lower for word in ["volume down", "quieter"]):
+            return self.execute_function("volume_down")
+        elif any(word in text_lower for word in ["mute", "silence"]):
+            return self.execute_function("mute")
+        elif any(word in text_lower for word in ["unmute", "sound on"]):
+            return self.execute_function("unmute")
+        elif any(word in text_lower for word in ["emergency", "sos", "help me"]):
+            return self.execute_function("emergency")
+        elif any(word in text_lower for word in ["shutdown", "turn off", "exit", "quit", "stop"]):
+            return self.execute_function("shutdown")
+        
+        return None
+    
+    def _understand_contextual_command(self, text: str) -> Optional[str]:
+        """Use AI to understand contextual commands and ask for confirmation"""
+        if not self.openai_client:
+            return None
+        
+        try:
+            # Prepare system prompt for command understanding
+            system_prompt = """You are INTA, an AI assistant for visually impaired users. 
+            Analyze the user's request and determine what command they want to execute.
+            
+            Available commands:
+            - capture_image: Take a picture and describe surroundings
+            - describe_surroundings: Analyze and describe environment
+            - navigate: Help with navigation
+            - read_text: Read text in images
+            - identify_objects: Identify objects in environment
+            - weather: Check weather information
+            - distance: Measure distance to objects
+            - obstacles: Detect obstacles
+            - time: Tell current time
+            - date: Tell current date
+            - joke: Tell a joke
+            - status: System status
+            - help: Show help information
+            
+            If the user's request matches one of these commands, respond with:
+            COMMAND: [command_name]
+            DESCRIPTION: [brief description of what you understood]
+            
+            If it doesn't match any command, respond with:
+            CONVERSATION: [natural response]
+            
+            Be contextual and understand natural language variations."""
+            
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": text}
+            ]
+            
+            # Query OpenAI for command understanding
+            if hasattr(self.openai_client, 'chat') and hasattr(self.openai_client.chat, 'completions'):
+                response = self.openai_client.chat.completions.create(
+                    model=self.config.get('openai', {}).get('model', 'gpt-4o-mini'),
+                    messages=messages,
+                    max_tokens=150,
+                    temperature=0.1
+                )
+                ai_response = response.choices[0].message.content
+            else:
+                response = self.openai_client.ChatCompletion.create(
+                    model=self.config.get('openai', {}).get('model', 'gpt-4o-mini'),
+                    messages=messages,
+                    max_tokens=150,
+                    temperature=0.1
+                )
+                ai_response = response.choices[0].message.content
+            
+            # Parse the AI response
+            if ai_response.startswith("COMMAND:"):
+                # Extract command and description
+                lines = ai_response.split('\n')
+                command_line = lines[0]
+                description_line = lines[1] if len(lines) > 1 else ""
+                
+                command = command_line.replace("COMMAND:", "").strip()
+                description = description_line.replace("DESCRIPTION:", "").strip()
+                
+                # Ask for confirmation if required
+                if self.confirmation_required:
+                    self.pending_confirmation = {
+                        "command": command,
+                        "description": description,
+                        "original_text": text
+                    }
+                    self.last_confirmation_time = time.time()
+                    return f"I understood you want me to {description}. Is that correct? Say yes or no."
+                else:
+                    return self.execute_function(command)
+            
+            elif ai_response.startswith("CONVERSATION:"):
+                # Return the conversation response
+                return ai_response.replace("CONVERSATION:", "").strip()
+            
+            else:
+                # Fallback to general conversation
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"Error in contextual command understanding: {str(e)}")
+            return None
+    
+    def _execute_confirmed_command(self, command_info: Dict[str, Any]) -> str:
+        """Execute a command that has been confirmed by the user"""
+        try:
+            command = command_info.get("command")
+            if command:
+                return self.execute_function(command)
+            else:
+                return "I'm sorry, there was an error executing the command."
+        except Exception as e:
+            self.logger.error(f"Error executing confirmed command: {str(e)}")
+            return "I encountered an error executing the command."
     
     def _query_openai(self, text: str) -> Optional[str]:
         """Query OpenAI for conversation"""
@@ -577,19 +767,19 @@ class IntaAIManager:
             if hasattr(self.openai_client, 'chat') and hasattr(self.openai_client.chat, 'completions'):
                 # New OpenAI API
                 response = self.openai_client.chat.completions.create(
-                    model=config.get('openai', {}).get('model', 'gpt-4o-mini'),
+                    model=self.config.get('openai', {}).get('model', 'gpt-4o-mini'),
                     messages=messages,
-                    max_tokens=config.get('openai', {}).get('max_tokens', 300),
-                    temperature=config.get('openai', {}).get('temperature', 0.3)
+                    max_tokens=self.config.get('openai', {}).get('max_tokens', 300),
+                    temperature=self.config.get('openai', {}).get('temperature', 0.3)
                 )
                 return response.choices[0].message.content
             else:
                 # Old OpenAI API
                 response = self.openai_client.ChatCompletion.create(
-                    model=config.get('openai', {}).get('model', 'gpt-4o-mini'),
+                    model=self.config.get('openai', {}).get('model', 'gpt-4o-mini'),
                     messages=messages,
-                    max_tokens=config.get('openai', {}).get('max_tokens', 300),
-                    temperature=config.get('openai', {}).get('temperature', 0.3)
+                    max_tokens=self.config.get('openai', {}).get('max_tokens', 300),
+                    temperature=self.config.get('openai', {}).get('temperature', 0.3)
                 )
                 return response.choices[0].message.content
                 
@@ -701,6 +891,11 @@ class IntaAIManager:
         return {
             "listening": self.listening,
             "running": self.running,
+            "wake_word_detected": self.wake_word_detected,
+            "wake_word": self.wake_word,
+            "contextual_mode": self.contextual_mode,
+            "confirmation_required": self.confirmation_required,
+            "pending_confirmation": self.pending_confirmation is not None,
             "speech_recognition_available": SPEECH_RECOGNITION_AVAILABLE,
             "whisper_available": WHISPER_AVAILABLE,
             "vad_available": VAD_AVAILABLE,
