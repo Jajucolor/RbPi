@@ -67,6 +67,9 @@ Microphone → Speech Recognition → Command Processing → AI Response → Tex
 git clone <repository-url>
 cd RbPi
 
+python3 -m venv glasses_env
+source glasses_env/bin/activate
+
 # Run the setup script
 python setup_inta.py
 ```
