@@ -301,21 +301,39 @@ class IntaAIManager:
             # Get microphone volume from config (0.0 to 1.0)
             mic_volume = self.config.get('inta', {}).get('microphone_volume', 0.8)
             
-            # Set volume using pactl
-            mic_name = "alsa_input.usb-MUSIC-BOOST_USB_Microphone_MB-306-00.mono-fallback.2"
+            # Find the USB microphone automatically
+            result = subprocess.run(['pactl', 'list', 'short', 'sources'], capture_output=True, text=True)
+            if result.returncode != 0:
+                self.logger.warning("Failed to list audio sources")
+                return
+            
+            # Parse sources to find USB microphone
+            sources = result.stdout.strip().split('\n')
+            usb_mic = None
+            
+            for source in sources:
+                if source and ('usb' in source.lower() or 'microphone' in source.lower()):
+                    parts = source.split('\t')
+                    if len(parts) >= 2:
+                        usb_mic = parts[1]  # Get the source name
+                        break
+            
+            if not usb_mic:
+                self.logger.warning("No USB microphone found in audio sources")
+                return
             
             # Convert 0.0-1.0 to 0-65536
             volume_int = int(mic_volume * 65536)
             
             # Set volume
             result = subprocess.run([
-                'pactl', 'set-source-volume', mic_name, str(volume_int)
-            ], capture_output=True)
+                'pactl', 'set-source-volume', usb_mic, str(volume_int)
+            ], capture_output=True, text=True)
             
             if result.returncode == 0:
-                self.logger.info(f"Microphone volume set to {mic_volume * 100:.0f}%")
+                self.logger.info(f"Microphone volume set to {mic_volume * 100:.0f}% for {usb_mic}")
             else:
-                self.logger.warning(f"Failed to set microphone volume: {result.stderr.decode()}")
+                self.logger.warning(f"Failed to set microphone volume: {result.stderr}")
                 
         except Exception as e:
             self.logger.warning(f"Failed to configure microphone volume: {e}")
@@ -446,7 +464,7 @@ class IntaAIManager:
                 self._emit_response(response)
             else:
                 self.logger.debug("No speech detected or empty text")
-                
+            
         except Exception as e:
             self.logger.error(f"Error processing audio: {str(e)}")
     
@@ -484,7 +502,7 @@ class IntaAIManager:
                 text = result["text"].strip()
                 if text:
                     return text
-                    
+                
             except Exception as e:
                 self.logger.error(f"Whisper transcription error: {str(e)}")
         
@@ -543,7 +561,7 @@ class IntaAIManager:
         except Exception as e:
             self.logger.error(f"Error processing command: {str(e)}")
             return "I encountered an error processing your request."
-    
+ 
     def _query_openai(self, text: str) -> Optional[str]:
         """Query OpenAI for conversation"""
         if not self.openai_client:
@@ -577,26 +595,26 @@ class IntaAIManager:
             if hasattr(self.openai_client, 'chat') and hasattr(self.openai_client.chat, 'completions'):
                 # New OpenAI API
                 response = self.openai_client.chat.completions.create(
-                    model=config.get('openai', {}).get('model', 'gpt-4o-mini'),
+                    model=self.config.get('openai', {}).get('model', 'gpt-4o-mini'),
                     messages=messages,
-                    max_tokens=config.get('openai', {}).get('max_tokens', 300),
-                    temperature=config.get('openai', {}).get('temperature', 0.3)
+                    max_tokens=self.config.get('openai', {}).get('max_tokens', 300),
+                    temperature=self.config.get('openai', {}).get('temperature', 0.3)
                 )
                 return response.choices[0].message.content
             else:
                 # Old OpenAI API
                 response = self.openai_client.ChatCompletion.create(
-                    model=config.get('openai', {}).get('model', 'gpt-4o-mini'),
+                    model=self.config.get('openai', {}).get('model', 'gpt-4o-mini'),
                     messages=messages,
-                    max_tokens=config.get('openai', {}).get('max_tokens', 300),
-                    temperature=config.get('openai', {}).get('temperature', 0.3)
+                    max_tokens=self.config.get('openai', {}).get('max_tokens', 300),
+                    temperature=self.config.get('openai', {}).get('temperature', 0.3)
                 )
                 return response.choices[0].message.content
-                
+            
         except Exception as e:
             self.logger.error(f"OpenAI API error: {str(e)}")
-            return None
-    
+        return None
+
     def _get_conversation_context(self) -> str:
         """Get conversation context for AI responses"""
         context = "Recent conversation:\n"
