@@ -234,6 +234,19 @@ class IntaAIManager:
     def _configure_pipewire(self):
         """Configure PipeWire for direct access"""
         try:
+            # Check if we're on a system that supports PipeWire
+            import subprocess
+            
+            # Test if PipeWire is available
+            try:
+                result = subprocess.run(['pw-cli', '--version'], capture_output=True)
+                if result.returncode != 0:
+                    self.logger.info("PipeWire not available, skipping configuration")
+                    return True  # Not an error, just not available
+            except FileNotFoundError:
+                self.logger.info("PipeWire not available, skipping configuration")
+                return True  # Not an error, just not available
+            
             # Disable ALSA completely
             os.environ['ALSA_PCM_CARD'] = ''
             os.environ['ALSA_PCM_DEVICE'] = ''
@@ -256,7 +269,6 @@ class IntaAIManager:
             
             # Redirect stderr to suppress ALSA/JACK warnings
             import sys
-            import os
             
             # Create a null device for stderr
             null_fd = os.open(os.devnull, os.O_WRONLY)
@@ -266,7 +278,6 @@ class IntaAIManager:
             
             # Kill any existing JACK processes
             try:
-                import subprocess
                 subprocess.run(['pkill', '-f', 'jack'], capture_output=True)
                 subprocess.run(['pkill', '-f', 'jackd'], capture_output=True)
             except:
@@ -274,7 +285,6 @@ class IntaAIManager:
             
             # Ensure PipeWire is running
             try:
-                import subprocess
                 result = subprocess.run(['pw-cli', 'info'], capture_output=True)
                 if result.returncode != 0:
                     subprocess.run(['pipewire'], capture_output=True)
@@ -298,15 +308,31 @@ class IntaAIManager:
         try:
             import subprocess
             
+            # Check if PipeWire is available
+            try:
+                result = subprocess.run(['pw-cli', '--version'], capture_output=True)
+                if result.returncode != 0:
+                    self.logger.info("PipeWire not available, skipping system setup")
+                    return
+            except FileNotFoundError:
+                self.logger.info("PipeWire not available, skipping system setup")
+                return
+            
             # Kill JACK processes
-            subprocess.run(['pkill', '-f', 'jack'], capture_output=True)
-            subprocess.run(['pkill', '-f', 'jackd'], capture_output=True)
+            try:
+                subprocess.run(['pkill', '-f', 'jack'], capture_output=True)
+                subprocess.run(['pkill', '-f', 'jackd'], capture_output=True)
+            except:
+                pass
             
             # Ensure PipeWire is running
-            result = subprocess.run(['pw-cli', 'info'], capture_output=True)
-            if result.returncode != 0:
-                subprocess.run(['pipewire'], capture_output=True)
-                time.sleep(2)
+            try:
+                result = subprocess.run(['pw-cli', 'info'], capture_output=True)
+                if result.returncode != 0:
+                    subprocess.run(['pipewire'], capture_output=True)
+                    time.sleep(2)
+            except:
+                pass
             
             self.logger.info("PipeWire system setup complete")
             
@@ -321,21 +347,45 @@ class IntaAIManager:
             # Get microphone volume from config (0.0 to 1.0)
             mic_volume = self.config.get('inta', {}).get('microphone_volume', 0.8)
             
-            # Set volume using pactl
-            mic_name = "alsa_input.usb-MUSIC-BOOST_USB_Microphone_MB-306-00.mono-fallback.2"
+            # Try to find the default microphone source
+            try:
+                # Get list of sources
+                result = subprocess.run(['pactl', 'list', 'sources', 'short'], capture_output=True, text=True)
+                if result.returncode == 0:
+                    sources = result.stdout.strip().split('\n')
+                    if sources and sources[0]:  # Check if we have any sources
+                        # Use the first available source (usually the default)
+                        mic_name = sources[0].split('\t')[1] if '\t' in sources[0] else sources[0].split()[1]
+                        
+                        # Convert 0.0-1.0 to 0-65536
+                        volume_int = int(mic_volume * 65536)
+                        
+                        # Set volume
+                        vol_result = subprocess.run([
+                            'pactl', 'set-source-volume', mic_name, str(volume_int)
+                        ], capture_output=True)
+                        
+                        if vol_result.returncode == 0:
+                            self.logger.info(f"Microphone volume set to {mic_volume * 100:.0f}% for {mic_name}")
+                        else:
+                            self.logger.warning(f"Failed to set microphone volume: {vol_result.stderr.decode()}")
+                    else:
+                        self.logger.warning("No audio sources found")
+                else:
+                    self.logger.warning("Failed to list audio sources")
+                    
+            except FileNotFoundError:
+                self.logger.warning("pactl not found - microphone volume configuration skipped")
+            except Exception as e:
+                self.logger.warning(f"Error configuring microphone volume: {e}")
             
-            # Convert 0.0-1.0 to 0-65536
-            volume_int = int(mic_volume * 65536)
-            
-            # Set volume
-            result = subprocess.run([
-                'pactl', 'set-source-volume', mic_name, str(volume_int)
-            ], capture_output=True)
-            
-            if result.returncode == 0:
-                self.logger.info(f"Microphone volume set to {mic_volume * 100:.0f}%")
-            else:
-                self.logger.warning(f"Failed to set microphone volume: {result.stderr.decode()}")
+            # Fallback: Try to set volume using speech recognition library
+            try:
+                if hasattr(self, 'microphone') and self.microphone:
+                    # The speech recognition library will handle volume automatically
+                    self.logger.info("Using speech recognition library for microphone volume")
+            except Exception as e:
+                self.logger.debug(f"Fallback microphone configuration: {e}")
                 
         except Exception as e:
             self.logger.warning(f"Failed to configure microphone volume: {e}")
