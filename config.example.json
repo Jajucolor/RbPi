@@ -1,61 +1,32 @@
 {
-    "openai": {
-        "api_key": "your-openai-api-key-here",
-        "model": "gpt-4o-mini",
-        "max_tokens": 300,
-        "temperature": 0.3
-    },
-  
-    "inta": {
-        "sample_rate": 16000,
-        "chunk_size": 1024,
+    "stt": {
         "energy_threshold": 300,
-        "pause_threshold": 0.8,
-        "phrase_threshold": 0.3,
         "dynamic_energy_threshold": true,
+        "pause_threshold": 0.8,
         "non_speaking_duration": 0.5,
-        "phrase_time_limit": null,
-        "microphone_volume": 0.8,
-        "whisper_model": "tiny",
-        "wake_word": "inta",
-        "wake_word_confidence": 0.7,
-        "wake_word_timeout": 5.0,
-        "contextual_mode": true,
-        "confirmation_required": true,
-        "confirmation_timeout": 10.0
+        "phrase_threshold": 0.3,
+        "ambient_noise_duration": 2,
+        "timeout": 5,
+        "phrase_time_limit": 5
     },
-    
-    "camera": {
-        "width": 1920,
-        "height": 1080,
-        "quality": 85,
-        "auto_focus": true
+    "ai": {
+        "model": "gpt-4o-mini",
+        "max_tokens": 150,
+        "temperature": 0.7,
+        "api_key": "your-openai-api-key-here"
     },
-    
-    "speech": {
-        "rate": 250,
-        "volume": 0.9,
-        "voice_id": "",
-        "interrupt_on_capture": true,
-        "allow_interrupt": true,
-        "interrupt_threshold": 0.5,
-        "realtime_enabled": true,
-        "word_delay": 0.05,
-        "sentence_delay": 0.2,
-        "chunk_size": 2
+    "tts": {
+        "rate": 200,
+        "volume": 0.9
     },
-    
     "system": {
-        "capture_interval": 3,
-        "log_level": "INFO",
-        "save_images": true,
-        "save_analysis": true
+        "wake_word": "hey assistant",
+        "log_responses": true
     },
-    
     "hardware": {
-        "button_pin": 18,
-        "led_pin": 24,
-        "shutdown_pin": 3,
-        "debounce_time": 0.2
+        "camera_enabled": true,
+        "sensors_enabled": true,
+        "sensor_port": "/dev/ttyACM0",
+        "sensor_baudrate": 9600
     }
-  } 
+} 
