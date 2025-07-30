@@ -76,12 +76,6 @@ class IntaAIManager:
         self.chunk_size = config.get('inta', {}).get('chunk_size', 1024)
         self.channels = 1
         
-        # Setup PipeWire system
-        self._setup_pipewire_system()
-        
-        # Configure microphone volume
-        self._configure_microphone_volume()
-        
         # Voice Activity Detection settings
         self.vad_aggressiveness = config.get('inta', {}).get('vad_aggressiveness', 2)
         self.speech_frames_threshold = config.get('inta', {}).get('speech_frames_threshold', 3)
@@ -121,7 +115,7 @@ class IntaAIManager:
         # Speech callback
         self._speech_callback = None
         
-        # Initialize components
+        # Initialize components with improved microphone detection
         self._initialize_speech_recognition()
         self._initialize_vad()
         self._initialize_whisper()
@@ -134,261 +128,112 @@ class IntaAIManager:
         self.logger.info("INTA AI Manager initialized")
     
     def _initialize_speech_recognition(self):
-        """Initialize speech recognition with PipeWire"""
+        """Initialize speech recognition with improved microphone detection"""
         if not SPEECH_RECOGNITION_AVAILABLE:
             self.logger.error("speech_recognition not available - audio recording disabled")
             return False
         
         try:
-            # Configure PipeWire and disable ALSA/JACK
-            self._configure_pipewire()
-            
             # Initialize recognizer
             self.recognizer = sr.Recognizer()
             
-            # Configure recognizer settings
-            self.recognizer.energy_threshold = 300  # Minimum audio energy to consider for recording
-            self.recognizer.dynamic_energy_threshold = True  # Adjust threshold dynamically
-            self.recognizer.pause_threshold = 0.8  # Seconds of non-speaking audio before phrase is considered complete
-            self.recognizer.non_speaking_duration = 0.5  # Seconds of non-speaking audio to keep on both sides of the recording
-            self.recognizer.phrase_threshold = 0.3  # Minimum seconds of speaking audio before we consider the speaking audio a phrase
-            self.recognizer.phrase_time_limit = None  # Maximum number of seconds that a phrase can be recorded for
+            # Configure recognizer settings based on reference code
+            self.recognizer.energy_threshold = 300
+            self.recognizer.dynamic_energy_threshold = True
+            self.recognizer.pause_threshold = 0.8
+            self.recognizer.non_speaking_duration = 0.5
+            self.recognizer.phrase_threshold = 0.3
             
-            # Try to find USB microphone with direct hardware access
-            self.microphone = self._find_usb_microphone()
+            # Find and configure microphone using improved detection
+            self.microphone = self._test_microphone_detection()
             
             if not self.microphone:
-                # Fallback to default microphone
-                self.microphone = sr.Microphone()
+                self.logger.error("No working microphone found")
+                return False
             
             # Adjust for ambient noise
             with self.microphone as source:
-                self.logger.info("Adjusting for ambient noise... Please stay quiet.")
-                self.recognizer.adjust_for_ambient_noise(source, duration=1)
+                self.logger.info("Adjusting for ambient noise... Please stay quiet for 2 seconds.")
+                self.recognizer.adjust_for_ambient_noise(source, duration=2)
             
-            # Get microphone info
-            mic_info = self._get_microphone_info()
-            self.logger.info(f"Microphone initialized: {mic_info}")
-            
-            return True
+            # Test speech recognition
+            if self._test_speech_recognition(self.microphone):
+                self.logger.info("Speech recognition initialized successfully")
+                return True
+            else:
+                self.logger.error("Speech recognition test failed")
+                return False
             
         except Exception as e:
             self.logger.error(f"Failed to initialize speech recognition: {str(e)}")
             return False
     
-    def _find_usb_microphone(self):
-        """Find and configure USB microphone with PipeWire"""
+    def _test_microphone_detection(self):
+        """Test microphone detection and list available devices - based on reference code"""
         try:
-            # List all microphones through PipeWire
+            # List all available microphones
             mics = sr.Microphone.list_microphone_names()
-            self.logger.info(f"Available microphones (PipeWire): {mics}")
+            self.logger.info(f"Available microphones: {mics}")
             
-            # Look for USB microphone (MUSIC-BOOST USB Microphone)
-            for i, mic_name in enumerate(mics):
-                if 'usb' in mic_name.lower() or 'microphone' in mic_name.lower() or 'music-boost' in mic_name.lower():
-                    self.logger.info(f"Found USB microphone: {mic_name} (index {i})")
-                    
-                    # Create microphone with specific device index
-                    mic = sr.Microphone(device_index=i)
-                    
-                    # Test if it works
-                    try:
-                        with mic as source:
-                            self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
-                        self.logger.info(f"USB microphone {i} working correctly with PipeWire")
-                        return mic
-                    except Exception as e:
-                        self.logger.warning(f"USB microphone {i} failed test: {e}")
-                        continue
-            
-            # If no USB mic found, try default microphone
-            self.logger.info("No USB microphone found, trying default microphone")
-            
+            # Try default microphone first
+            self.logger.info("Testing default microphone...")
             try:
-                # Try default microphone
                 mic = sr.Microphone()
-                with mic as source:
-                    self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
-                self.logger.info("Default microphone working correctly with PipeWire")
+                self.logger.info(f"Default microphone: {mic}")
                 return mic
             except Exception as e:
-                self.logger.warning(f"Default microphone failed: {e}")
+                self.logger.error(f"Default microphone failed: {e}")
             
             # Try different device configurations
-            for device_index in range(5):  # Try first 5 devices
+            for device_index in range(min(5, len(mics))):
                 try:
+                    self.logger.info(f"Testing microphone device {device_index}...")
                     mic = sr.Microphone(device_index=device_index)
-                    with mic as source:
-                        self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
-                    self.logger.info(f"Microphone {device_index} working correctly with PipeWire")
+                    self.logger.info(f"Microphone {device_index} working: {mic}")
                     return mic
                 except Exception as e:
+                    self.logger.warning(f"Microphone {device_index} failed: {e}")
                     continue
             
             return None
             
         except Exception as e:
-            self.logger.error(f"Error finding USB microphone: {e}")
+            self.logger.error(f"Error in microphone detection: {e}")
             return None
     
-    def _configure_pipewire(self):
-        """Configure PipeWire for direct access"""
-        try:
-            # Check if we're on a system that supports PipeWire
-            import subprocess
-            
-            # Test if PipeWire is available
-            try:
-                result = subprocess.run(['pw-cli', '--version'], capture_output=True)
-                if result.returncode != 0:
-                    self.logger.info("PipeWire not available, skipping configuration")
-                    return True  # Not an error, just not available
-            except FileNotFoundError:
-                self.logger.info("PipeWire not available, skipping configuration")
-                return True  # Not an error, just not available
-            
-            # Disable ALSA completely
-            os.environ['ALSA_PCM_CARD'] = ''
-            os.environ['ALSA_PCM_DEVICE'] = ''
-            os.environ['ALSA_CARD'] = ''
-            
-            # Force PipeWire
-            os.environ['PIPEWIRE_RUNTIME_DIR'] = '/tmp/pipewire-0'
-            os.environ['PIPEWIRE_REMOTE'] = 'pipewire-0'
-            
-            # Disable JACK
-            os.environ['JACK_NO_AUDIO_RESERVATION'] = '1'
-            os.environ['JACK_PROMISCUOUS_SERVER'] = ''
-            
-            # Suppress ALSA and JACK error messages
-            os.environ['ALSA_PCM_CARD'] = ''
-            os.environ['ALSA_PCM_DEVICE'] = ''
-            os.environ['ALSA_CARD'] = ''
-            os.environ['JACK_NO_AUDIO_RESERVATION'] = '1'
-            os.environ['JACK_PROMISCUOUS_SERVER'] = ''
-            
-            # Redirect stderr to suppress ALSA/JACK warnings
-            import sys
-            
-            # Create a null device for stderr
-            null_fd = os.open(os.devnull, os.O_WRONLY)
-            old_stderr = os.dup(2)
-            os.dup2(null_fd, 2)
-            os.close(null_fd)
-            
-            # Kill any existing JACK processes
-            try:
-                subprocess.run(['pkill', '-f', 'jack'], capture_output=True)
-                subprocess.run(['pkill', '-f', 'jackd'], capture_output=True)
-            except:
-                pass
-            
-            # Ensure PipeWire is running
-            try:
-                result = subprocess.run(['pw-cli', 'info'], capture_output=True)
-                if result.returncode != 0:
-                    subprocess.run(['pipewire'], capture_output=True)
-                    time.sleep(2)
-            except:
-                pass
-            
-            # Restore stderr
-            os.dup2(old_stderr, 2)
-            os.close(old_stderr)
-            
-            self.logger.info("PipeWire configured, ALSA and JACK disabled")
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"Failed to configure PipeWire: {e}")
+    def _test_speech_recognition(self, microphone):
+        """Test speech recognition with the given microphone - based on reference code"""
+        if not microphone:
+            self.logger.error("No microphone available for testing")
             return False
-    
-    def _setup_pipewire_system(self):
-        """Setup PipeWire system and kill conflicting services"""
+        
         try:
-            import subprocess
-            
-            # Check if PipeWire is available
-            try:
-                result = subprocess.run(['pw-cli', '--version'], capture_output=True)
-                if result.returncode != 0:
-                    self.logger.info("PipeWire not available, skipping system setup")
-                    return
-            except FileNotFoundError:
-                self.logger.info("PipeWire not available, skipping system setup")
-                return
-            
-            # Kill JACK processes
-            try:
-                subprocess.run(['pkill', '-f', 'jack'], capture_output=True)
-                subprocess.run(['pkill', '-f', 'jackd'], capture_output=True)
-            except:
-                pass
-            
-            # Ensure PipeWire is running
-            try:
-                result = subprocess.run(['pw-cli', 'info'], capture_output=True)
-                if result.returncode != 0:
-                    subprocess.run(['pipewire'], capture_output=True)
-                    time.sleep(2)
-            except:
-                pass
-            
-            self.logger.info("PipeWire system setup complete")
-            
-        except Exception as e:
-            self.logger.warning(f"PipeWire system setup failed: {e}")
-    
-    def _configure_microphone_volume(self):
-        """Configure microphone volume"""
-        try:
-            import subprocess
-            
-            # Get microphone volume from config (0.0 to 1.0)
-            mic_volume = self.config.get('inta', {}).get('microphone_volume', 0.8)
-            
-            # Try to find the default microphone source
-            try:
-                # Get list of sources
-                result = subprocess.run(['pactl', 'list', 'sources', 'short'], capture_output=True, text=True)
-                if result.returncode == 0:
-                    sources = result.stdout.strip().split('\n')
-                    if sources and sources[0]:  # Check if we have any sources
-                        # Use the first available source (usually the default)
-                        mic_name = sources[0].split('\t')[1] if '\t' in sources[0] else sources[0].split()[1]
-                        
-                        # Convert 0.0-1.0 to 0-65536
-                        volume_int = int(mic_volume * 65536)
-                        
-                        # Set volume
-                        vol_result = subprocess.run([
-                            'pactl', 'set-source-volume', mic_name, str(volume_int)
-                        ], capture_output=True)
-                        
-                        if vol_result.returncode == 0:
-                            self.logger.info(f"Microphone volume set to {mic_volume * 100:.0f}% for {mic_name}")
-                        else:
-                            self.logger.warning(f"Failed to set microphone volume: {vol_result.stderr.decode()}")
-                    else:
-                        self.logger.warning("No audio sources found")
-                else:
-                    self.logger.warning("Failed to list audio sources")
+            # Test listening
+            self.logger.info("Testing speech recognition... Please say something... (5 second timeout)")
+            with microphone as source:
+                try:
+                    audio = self.recognizer.listen(source, timeout=5, phrase_time_limit=5)
+                    self.logger.info("Audio captured successfully")
                     
-            except FileNotFoundError:
-                self.logger.warning("pactl not found - microphone volume configuration skipped")
-            except Exception as e:
-                self.logger.warning(f"Error configuring microphone volume: {e}")
-            
-            # Fallback: Try to set volume using speech recognition library
-            try:
-                if hasattr(self, 'microphone') and self.microphone:
-                    # The speech recognition library will handle volume automatically
-                    self.logger.info("Using speech recognition library for microphone volume")
-            except Exception as e:
-                self.logger.debug(f"Fallback microphone configuration: {e}")
-                
+                    # Try to recognize speech
+                    try:
+                        text = self.recognizer.recognize_google(audio)
+                        self.logger.info(f"Recognized speech: '{text}'")
+                        return True
+                    except sr.UnknownValueError:
+                        self.logger.warning("Google Speech Recognition could not understand audio")
+                        return False
+                    except sr.RequestError as e:
+                        self.logger.error(f"Google Speech Recognition service error: {e}")
+                        return False
+                        
+                except sr.WaitTimeoutError:
+                    self.logger.warning("No speech detected within timeout")
+                    return False
+                    
         except Exception as e:
-            self.logger.warning(f"Failed to configure microphone volume: {e}")
+            self.logger.error(f"Error in speech recognition test: {e}")
+            return False
     
     def _get_microphone_info(self) -> str:
         """Get information about available microphones"""
@@ -461,7 +306,7 @@ class IntaAIManager:
         self.listening = False
         self.running = False
         
-        if self.listen_thread and self.listen_thread.is_alive():
+        if hasattr(self, 'listen_thread') and self.listen_thread and self.listen_thread.is_alive():
             self.listen_thread.join(timeout=2)
         
         self.logger.info("Stopped listening")
