@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-"""
-INTA AI Assistant for Visually Impaired Users
-Enhanced STT → AI → TTS System with Camera and Sensor Integration
-"""
-
 import logging
 import speech_recognition as sr
 import time
@@ -12,13 +6,17 @@ import os
 from datetime import datetime
 import sys
 from pathlib import Path
+from gtts import gTTS
+import pygame
+import tempfile
+import os
+import openai
 
-# Import assistive glasses modules
 from modules.camera_manager import CameraManager
 from modules.vision_analyzer import VisionAnalyzer
 from modules.sensor_manager import NavigationSensorManager
 
-# Configure logging
+# 추곽가과제로그형식
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -29,7 +27,6 @@ logging.basicConfig(
 )
 
 class IntaAIAssistant:
-    """카메라와 센서가 통합된 시각장애인용 INTA AI 어시스턴트"""
     
     def __init__(self):
         self.logger = logging.getLogger(__name__)
@@ -45,7 +42,7 @@ class IntaAIAssistant:
         # 설정 불러오기
         self.config = self.load_config()
         
-        # TTS를 위한 pygame 믹서 초기화
+        # TTS를 위한 pygame mixer 초기화
         self.setup_audio_system()
         
         # 컴포넌트 초기화
@@ -63,12 +60,10 @@ class IntaAIAssistant:
                 status_callback=self._on_sensor_status_change
             )
         
-        self.logger.info("INTA AI Assistant initialized with full assistive glasses capabilities")
+        self.logger.info("INTA AI Assistant initialized")
     
     def setup_audio_system(self):
-        """텍스트-투-스피치를 위한 pygame 믹서 초기화"""
-        try:
-            import pygame
+        try:    
             pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
             self.logger.info("Audio system initialized successfully")
         except Exception as e:
@@ -76,7 +71,7 @@ class IntaAIAssistant:
             self.logger.warning("Text-to-speech will use fallback (print only)")
     
     def load_config(self):
-        """설정 파일에서 불러오거나 기본값 사용"""
+        #config 불러오기 
         config_file = Path("config.json")
         
         if config_file.exists():
@@ -86,7 +81,7 @@ class IntaAIAssistant:
             except Exception as e:
                 self.logger.warning(f"Could not load config file: {e}")
         
-        # Default configuration
+        # 디폴트 설정
         return {
             "stt": {
                 "energy_threshold": 300,
@@ -115,13 +110,13 @@ class IntaAIAssistant:
             "hardware": {
                 "camera_enabled": True,
                 "sensors_enabled": True,
-                "sensor_port": "/dev/ttyACM0",
+                "sensor_port": "/dev/ttyUSB0",
                 "sensor_baudrate": 9600
             }
         }
     
     def setup_microphone(self):
-        """마이크를 테스트하여 설정"""
+        #마이크
         try:
             # 사용 가능한 모든 마이크 나열
             mics = sr.Microphone.list_microphone_names()
@@ -152,7 +147,7 @@ class IntaAIAssistant:
             raise
     
     def setup_recognizer(self):
-        """음성 인식기를 최적 설정으로 초기화"""
+        # 음성인식 설정
         self.recognizer = sr.Recognizer()
         
         # 설정에서 인식기 세팅 구성
@@ -166,7 +161,7 @@ class IntaAIAssistant:
         self.logger.info("Speech recognizer configured")
     
     def initialize_assistive_modules(self):
-        """카메라, 비전 분석기, 센서 초기화"""
+        # camera,vision, sensor manager 이잉
         try:
             # 카메라 매니저 초기화
             if self.config.get("hardware", {}).get("camera_enabled", True):
@@ -176,7 +171,7 @@ class IntaAIAssistant:
                 self.camera_manager = None
                 self.logger.info("Camera disabled in configuration")
             
-            # OpenAI API 키로 비전 분석기 초기화
+            # OpenAI API 키로 분석기 초기화
             api_key = self.config["ai"]["api_key"]
             if api_key != "your-openai-api-key-here":
                 self.vision_analyzer = VisionAnalyzer(api_key=api_key)
@@ -197,19 +192,20 @@ class IntaAIAssistant:
                 
         except Exception as e:
             self.logger.error(f"Error initializing assistive modules: {e}")
-            # 하드웨어 기능 없이 계속 진행
+            # 하드웨어 기능 없이 계속 진행, 깨알 추가과제
             self.camera_manager = None
             self.vision_analyzer = None
             self.sensor_monitor = None
     
     def listen_for_speech(self):
-        """음성 입력 듣기"""
+        # 음성 입력 인식
         if not self.microphone:
             self.logger.error("No microphone available")
             return None
         
         try:
             # 주변 소음 보정
+            #TODO: 잘 안되는 듯? -------> 필요함
             self.logger.info("Adjusting for ambient noise... Please stay quiet.")
             with self.microphone as source:
                 self.recognizer.adjust_for_ambient_noise(
@@ -217,7 +213,7 @@ class IntaAIAssistant:
                     duration=self.config["stt"]["ambient_noise_duration"]
                 )
             
-            # 음성 듣기
+            # 음성 인식
             self.logger.info("Listening for speech...")
             with self.microphone as source:
                 try:
@@ -238,7 +234,7 @@ class IntaAIAssistant:
             return None
     
     def speech_to_text(self, audio):
-        """Google 음성 인식을 사용하여 음성을 텍스트로 변환"""
+        # google speech_recognition 을 활용한 stt
         try:
             text = self.recognizer.recognize_google(audio)
             self.logger.info(f"Recognized speech: '{text}'")
@@ -255,21 +251,20 @@ class IntaAIAssistant:
             return None
     
     def generate_ai_response(self, user_input):
-        """OpenAI API와 사용자 정의 프롬프트 시스템을 사용하여 AI 응답 생성"""
+        # t2t? openai에게 음성 정보 보내고 답 받기
         try:
-            import openai
             
-            # 설정에서 API 키 가져오기
+            # 설정에서 API...
             api_key = self.config["ai"]["api_key"]
             if api_key == "your-openai-api-key-here":
                 self.logger.warning("OpenAI API key not configured, using fallback response")
-                return f"I heard you say: '{user_input}'. Please configure your OpenAI API key in config.json to use full AI capabilities."
+                return f"I heard you say: '{user_input}'. Please configure your OpenAI API key in config.json."
             
-            # 새로운 OpenAI API 포맷으로 클라이언트 설정
+            # OpenAI API 로 클라이언트 설정
             client = openai.OpenAI(api_key=api_key)
             
-            # INTA 어시스턴트용 향상된 시스템 프롬프트
-            system_prompt = """You are INTA, an advanced AI assistant for visually impaired users. You have access to a camera, ultrasonic sensors, and infrared sensors to help users navigate and understand their environment.
+            # 프롬프트
+            system_prompt = """You are INTA, an advanced AI assistant for visually impaired users. You have access to a camera, ultrasonic sensors, and infrared sensors to help users navigate and understand their environment. Do not say more than 3 sentences.
 
             Analyze the user's request and determine what command they want to execute. Understand contextual language - users may not use exact keywords but express their needs naturally.
 
@@ -302,7 +297,7 @@ class IntaAIAssistant:
             DESCRIPTION: [brief description of what you understood]
 
             If it doesn't match any command, respond with:
-            CONVERSATION: [natural response]
+            [natural response]
 
             Be intelligent and contextual. Users may say things like:
             - "I can't see what's ahead" → COMMAND: obstacles
@@ -316,7 +311,7 @@ class IntaAIAssistant:
                 {"role": "user", "content": user_input}
             ]
             
-            # 새로운 OpenAI API 포맷으로 API 호출
+            # api 호출
             response = client.chat.completions.create(
                 model=self.config["ai"]["model"],
                 messages=messages,
@@ -337,14 +332,9 @@ class IntaAIAssistant:
             return "I'm sorry, I couldn't process that request due to an error."
     
     def text_to_speech(self, text):
-        """gTTS를 사용하여 텍스트를 음성으로 변환"""
+        #gtts 를 이용한 tts 모델
         try:
-            from gtts import gTTS
-            import pygame
-            import tempfile
-            import os
-            
-            # 오디오를 위한 임시 파일 생성
+            # 오디오를 위한 임시 파일 생성(이후에 gtts로 덮어쓴다)
             with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as fp:
                 temp_filename = fp.name
             
@@ -352,7 +342,7 @@ class IntaAIAssistant:
             tts = gTTS(text=text, lang='en', slow=False)
             tts.save(temp_filename)
             
-            # 오디오 재생 (믹서 이미 초기화됨)
+            # 오디오 재생
             pygame.mixer.music.load(temp_filename)
             pygame.mixer.music.play()
             
@@ -367,26 +357,26 @@ class IntaAIAssistant:
             
         except Exception as e:
             self.logger.error(f"Error in text-to-speech: {e}")
-            # 예외 발생 시 프린트로 대체
+            # 에러 발생 시 프린트로 대체
             print(f"AI Response: {text}")
     
-    def log_response(self, user_input, ai_response):
-        """대화 로그 남기기"""
-        try:
-            log_file = Path("conversation_log.txt")
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            
-            with open(log_file, "a", encoding="utf-8") as f:
-                f.write(f"[{timestamp}] User: {user_input}\n")
-                f.write(f"[{timestamp}] AI: {ai_response}\n")
-                f.write("-" * 50 + "\n")
-                
-        except Exception as e:
-            self.logger.error(f"Error logging conversation: {e}")
+    #def log_response(self, user_input, ai_response):
+    #    """대화 로그 남기기"""
+    #    try:
+    #        log_file = Path("conversation_log.txt")
+    #        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    #        
+    #        with open(log_file, "a", encoding="utf-8") as f:
+    #            f.write(f"[{timestamp}] User: {user_input}\n")
+    #            f.write(f"[{timestamp}] AI: {ai_response}\n")
+    #            f.write("-" * 50 + "\n")
+    #            
+    #    except Exception as e:
+    #        self.logger.error(f"Error logging conversation: {e}")
     
     def process_conversation(self):
-        """대화 한 사이클 처리"""
-        # 음성 듣기
+        # 파이프라인
+        # 음성 인식
         audio = self.listen_for_speech()
         if not audio:
             return False
@@ -397,7 +387,7 @@ class IntaAIAssistant:
             self.text_to_speech("I didn't catch that. Could you please repeat?")
             return False
         
-        # 웨이크 워드 확인
+        # wake word 확인(assistant)
         wake_word = self.config["system"]["wake_word"].lower()
         if wake_word and wake_word not in user_input.lower():
             self.logger.info("Wake word not detected, ignoring input")
@@ -415,7 +405,7 @@ class IntaAIAssistant:
         return True
     
     def process_ai_response(self, ai_response):
-        """AI 응답을 처리하고 필요시 명령 실행"""
+        # ai 응답 or 커맨드 실행 
         try:
             # 응답에 명령이 포함되어 있는지 확인
             if ai_response.startswith("COMMAND:"):
@@ -434,7 +424,7 @@ class IntaAIAssistant:
                 command_response = self.execute_command(command_name, description)
                 return command_response
             else:
-                # 일반 대화 응답
+                # 일반 응답
                 return ai_response
                 
         except Exception as e:
@@ -442,7 +432,7 @@ class IntaAIAssistant:
             return ai_response
     
     def execute_command(self, command_name, description):
-        """보조 안경의 모든 기능으로 명령 실행"""
+        # 커맨드
         try:
             command_name = command_name.lower()
             
@@ -514,7 +504,7 @@ class IntaAIAssistant:
             return f"Sorry, there was an error executing the {command_name} command."
     
     def capture_and_analyze_image(self, analysis_type="general"):
-        """요청된 유형에 따라 이미지 캡처 및 분석"""
+        # 요청에 따른 카메라 촬영 답변
         try:
             if not self.camera_manager:
                 return "Camera is not available. Please check camera connection."
@@ -549,12 +539,12 @@ class IntaAIAssistant:
             return "An error occurred during image analysis. Please try again."
     
     def check_navigation_safety(self):
-        """센서와 카메라를 사용하여 내비게이션 안전 확인"""
+        # 네비게이션 --> 카메라와 센서
         try:
             # 센서 데이터 가져오기
             sensor_response = self.get_sensor_data()
             
-            # 환경 캡처 및 분석
+            # 환경 초ㅏㄹ영 및 분석
             camera_response = self.capture_and_analyze_image("surroundings")
             
             # 센서와 카메라 데이터 결합
@@ -568,7 +558,7 @@ class IntaAIAssistant:
             return "Unable to assess navigation safety. Please proceed with caution."
     
     def start_navigation_monitoring(self):
-        """센서로 연속 내비게이션 모니터링 시작"""
+        # 센서로 모니터링
         try:
             if self.navigation_active:
                 return "Navigation monitoring is already active."
@@ -576,7 +566,7 @@ class IntaAIAssistant:
             if not self.sensor_monitor:
                 return "Sensors are not available. Cannot start navigation monitoring."
             
-            # 새 센서 매니저로 내비게이션 모니터링 시작
+            # 센서 매니저로 내비게이션 모니터링 시작
             if self.sensor_monitor.start_navigation_monitoring():
                 self.navigation_active = True
                 self.logger.info("Navigation monitoring started")
@@ -590,12 +580,12 @@ class IntaAIAssistant:
             return "Failed to start navigation monitoring. Please try again."
     
     def stop_navigation_monitoring(self):
-        """연속 내비게이션 모니터링 중지"""
+        # 모니터링 중지
         try:
             if not self.navigation_active:
                 return "Navigation monitoring is not currently active."
             
-            # 새 센서 매니저로 내비게이션 모니터링 중지
+            # 중지
             if self.sensor_monitor.stop_navigation_monitoring():
                 self.navigation_active = False
                 self.logger.info("Navigation monitoring stopped")
@@ -608,39 +598,31 @@ class IntaAIAssistant:
             return "Error stopping navigation monitoring."
     
     def get_navigation_status(self):
-        """현재 내비게이션 모니터링 상태 가져오기"""
+        # 센서를 통한 상황파악
         if self.navigation_active:
             return "Navigation monitoring is currently active. Say 'stop navigation' to end monitoring."
         else:
             return "Navigation monitoring is not active. Say 'start navigation' to begin monitoring."
     
     def _on_distance_update(self, distance: float):
-        """센서 매니저로부터 거리 업데이트 콜백"""
+        # 거리 업데이트 
         self.logger.debug(f"Distance update: {distance:.1f} cm")
     
     def _on_navigation_warning(self, message: str):
-        """센서 매니저로부터 내비게이션 경고 콜백"""
+        # 경고 callback
         self.logger.info(f"Navigation warning: {message}")
         # 사용자에게 경고 음성 출력
         self.text_to_speech(message)
-        # 다음 경고를 위해 음성 완료 표시
+ 
         if hasattr(self, 'sensor_monitor') and self.sensor_monitor:
             self.sensor_monitor.mark_speech_complete()
     
     def _on_sensor_status_change(self, status):
-        """센서 상태 변경 콜백"""
+        # 센서 상태
         self.logger.info(f"Sensor status changed to: {status.value}")
     
-    def measure_distance(self):
-        """초음파 센서를 사용하여 거리 측정"""
-        try:
-            return self.get_sensor_data()
-        except Exception as e:
-            self.logger.error(f"Error measuring distance: {e}")
-            return "Unable to measure distance. Please check sensor connection."
-    
     def detect_obstacles(self):
-        """센서와 카메라를 사용하여 장애물 감지"""
+        # 장애물 감지
         try:
             # 센서 데이터 가져오기
             sensor_response = self.get_sensor_data()
@@ -655,7 +637,7 @@ class IntaAIAssistant:
             return "Unable to detect obstacles. Please proceed with caution."
     
     def get_sensor_data(self):
-        """초음파 및 적외선 센서에서 데이터 가져오기"""
+        # 데이터 가져오기
         try:
             if not self.sensor_monitor:
                 return "Sensors are not available. Please check sensor connection."
@@ -680,7 +662,7 @@ class IntaAIAssistant:
             return "Unable to read sensor data. Please check sensor connection."
     
     def get_system_status(self):
-        """초음파 및 적외선 센서에서 데이터 가져오기"""
+        # 모듈 상태 
         try:
             status_parts = []
             
@@ -694,7 +676,7 @@ class IntaAIAssistant:
             else:
                 status_parts.append("Camera: Not available")
             
-            # 비전 분석기 상태
+            # 분석기 상태
             if self.vision_analyzer:
                 vision_stats = self.vision_analyzer.get_analysis_stats()
                 status_parts.append(f"Vision analysis: {vision_stats['mode']} mode")
@@ -747,12 +729,12 @@ Just speak naturally! I understand context, so you can say things like:
 "I can't see what's ahead" or "What's in this room?" and I'll know what you need."""
     
     def start(self):
-        """메인 시스템 루프 시작"""
+        # 시스템 루프
         self.logger.info("Starting Simple STT System...")
         self.running = True
         
-        # 환영 메시지
-        self.text_to_speech("Simple STT system is ready. Start speaking!")
+        # ㅎㅇ
+        self.text_to_speech("Assistance glasses is ready. Start speaking!")
         
         try:
             while self.running:
@@ -767,7 +749,7 @@ Just speak naturally! I understand context, so you can say things like:
             self.shutdown()
     
     def shutdown(self):
-        """하드웨어 정리와 함께 정상 종료"""
+        # 샷다
         self.logger.info("Shutting down INTA AI Assistant...")
         self.running = False
         
@@ -796,8 +778,13 @@ Just speak naturally! I understand context, so you can say things like:
         self.text_to_speech("Goodbye! INTA AI Assistant shutting down.")
         self.logger.info("System shutdown complete")
 
+
+
+
+
+
+
 def main():
-    """Main entry point"""
     try:
         system = IntaAIAssistant()
         system.start()
