@@ -250,86 +250,88 @@ class IntaAIAssistant:
             self.logger.error(f"Error in speech recognition: {e}")
             return None
     
-    def generate_ai_response(self, user_input):
-        # t2t? openai에게 음성 정보 보내고 답 받기
-        try:
-            
-            # 설정에서 API...
-            api_key = self.config["ai"]["api_key"]
-            if api_key == "your-openai-api-key-here":
-                self.logger.warning("OpenAI API key not configured, using fallback response")
-                return f"I heard you say: '{user_input}'. Please configure your OpenAI API key in config.json."
-            
-            # OpenAI API 로 클라이언트 설정
-            client = openai.OpenAI(api_key=api_key)
-            
-            # 프롬프트
-            system_prompt = """You are INTA, an advanced AI assistant for visually impaired users. You have access to a camera, ultrasonic sensors, and infrared sensors to help users navigate and understand their environment. Do not say more than 3 sentences.
+# at top of the file
+import ollama
 
-            Analyze the user's request and determine what command they want to execute. Understand contextual language - users may not use exact keywords but express their needs naturally.
+def generate_ai_response(self, user_input):
+    # t2t? 로컬 Ollama에게 텍스트 보내고 답 받기
+    try:
+        # (옵션) 원격/커스텀 호스트를 쓰고 싶다면 config에 ollama_host를 넣으세요.
+        # 예: "ollama_host": "http://127.0.0.1:11434"
+        ollama_host = self.config["ai"].get("ollama_host")
+        client = ollama.Client(host=ollama_host) if ollama_host else ollama
 
-            Available commands and their contextual variations:
+        # 프롬프트
+        system_prompt = """You are INTA, an advanced AI assistant for visually impaired users. You have access to a camera, ultrasonic sensors, and infrared sensors to help users navigate and understand their environment. Do not say more than 3 sentences.
 
-            CAMERA & VISION COMMANDS:
-            - capture_image: "take a picture", "what do you see", "describe what's around me", "show me my surroundings", "what's in front of me"
-            - describe_surroundings: "what's the environment like", "describe the area", "what's around here", "tell me about this place"
-            - read_text: "read that sign", "what does that say", "read the text", "what's written there", "read the label"
-            - identify_objects: "what objects do you see", "what's that thing", "identify what's there", "what items are visible"
+        Analyze the user's request and determine what command they want to execute. Understand contextual language - users may not use exact keywords but express their needs naturally.
 
-            NAVIGATION & SENSOR COMMANDS:
-            - navigate: "help me walk", "is it safe to move forward", "guide me", "help me navigate", "which way should I go", "start navigation", "begin navigation"
-            - stop_navigation: "stop navigation", "end navigation", "stop guiding me", "stop monitoring", "stop walking assistance"
-            - navigation_status: "navigation status", "is navigation active", "am I being guided", "navigation status check"
-            - distance: "how far is that", "measure the distance", "how close is that object", "what's the distance"
-            - obstacles: "are there any obstacles", "what's blocking my path", "is the way clear", "any hazards ahead", "check for obstacles"
+        Available commands and their contextual variations:
 
-            UTILITY COMMANDS:
-            - time: "what time is it", "tell me the time", "current time"
-            - date: "what's today's date", "what day is it", "current date"
-            - weather: "what's the weather like", "weather forecast", "is it raining"
-            - joke: "tell me a joke", "make me laugh", "say something funny"
-            - status: "system status", "how are you working", "are you functioning properly"
-            - help: "help", "what can you do", "show me your capabilities"
+        CAMERA & VISION COMMANDS:
+        - capture_image: "take a picture", "what do you see", "describe what's around me", "show me my surroundings", "what's in front of me"
+        - describe_surroundings: "what's the environment like", "describe the area", "what's around here", "tell me about this place"
+        - read_text: "read that sign", "what does that say", "read the text", "what's written there", "read the label"
+        - identify_objects: "what objects do you see", "what's that thing", "identify what's there", "what items are visible"
 
-            RESPONSE FORMAT:
-            If the user's request matches one of these commands, respond with:
-            COMMAND: [command_name]
-            DESCRIPTION: [brief description of what you understood]
+        NAVIGATION & SENSOR COMMANDS:
+        - navigate: "help me walk", "is it safe to move forward", "guide me", "help me navigate", "which way should I go", "start navigation", "begin navigation"
+        - stop_navigation: "stop navigation", "end navigation", "stop guiding me", "stop monitoring", "stop walking assistance"
+        - navigation_status: "navigation status", "is navigation active", "am I being guided", "navigation status check"
+        - distance: "how far is that", "measure the distance", "how close is that object", "what's the distance"
+        - obstacles: "are there any obstacles", "what's blocking my path", "is the way clear", "any hazards ahead", "check for obstacles"
 
-            If it doesn't match any command, respond with:
-            [natural response]
+        UTILITY COMMANDS:
+        - time: "what time is it", "tell me the time", "current time"
+        - date: "what's today's date", "what day is it", "current date"
+        - weather: "what's the weather like", "weather forecast", "is it raining"
+        - joke: "tell me a joke", "make me laugh", "say something funny"
+        - status: "system status", "how are you working", "are you functioning properly"
+        - help: "help", "what can you do", "show me your capabilities"
 
-            Be intelligent and contextual. Users may say things like:
-            - "I can't see what's ahead" → COMMAND: obstacles
-            - "What's in this room?" → COMMAND: describe_surroundings  
-            - "I need to read something" → COMMAND: read_text
-            - "Is it safe to walk?" → COMMAND: navigate
-            - "What's that object?" → COMMAND: identify_objects"""
-            
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_input}
-            ]
-            
-            # api 호출
-            response = client.chat.completions.create(
-                model=self.config["ai"]["model"],
-                messages=messages,
-                max_tokens=self.config["ai"]["max_tokens"],
-                temperature=self.config["ai"]["temperature"]
-            )
-            
-            ai_response = response.choices[0].message.content
-            
-            # 상호작용 로그
-            if self.config["system"]["log_responses"]:
-                self.log_response(user_input, ai_response)
-            
-            return ai_response
-            
-        except Exception as e:
-            self.logger.error(f"Error generating AI response: {e}")
-            return "I'm sorry, I couldn't process that request due to an error."
+        RESPONSE FORMAT:
+        If the user's request matches one of these commands, respond with:
+        COMMAND: [command_name]
+        DESCRIPTION: [brief description of what you understood]
+
+        If it doesn't match any command, respond with:
+        [natural response]
+
+        Be intelligent and contextual. Users may say things like:
+        - "I can't see what's ahead" → COMMAND: obstacles
+        - "What's in this room?" → COMMAND: describe_surroundings  
+        - "I need to read something" → COMMAND: read_text
+        - "Is it safe to walk?" → COMMAND: navigate
+        - "What's that object?" → COMMAND: identify_objects"""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_input},
+        ]
+
+        # Ollama 옵션 매핑: temperature, num_predict(=max_tokens)
+        options = {}
+        if "temperature" in self.config["ai"]:
+            options["temperature"] = float(self.config["ai"]["temperature"])
+        if "max_tokens" in self.config["ai"]:
+            options["num_predict"] = int(self.config["ai"]["max_tokens"])
+
+        # 모델 이름 예: "llama3:8b", "qwen2.5:7b", "gemma2:9b"
+        model_name = self.config["ai"].get("model", "llama3.2:11b")
+
+        resp = client.chat(model=model_name, messages=messages, options=options)
+        ai_response = resp["message"]["content"]
+
+        # 상호작용 로그
+        if self.config["system"].get("log_responses"):
+            self.log_response(user_input, ai_response)
+
+        return ai_response
+
+    except Exception as e:
+        self.logger.error(f"Error generating AI response (Ollama): {e}")
+        return "I'm sorry, I couldn't process that request due to an error."
+
     
     def text_to_speech(self, text):
         #gtts 를 이용한 tts 모델
