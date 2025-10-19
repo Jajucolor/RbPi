@@ -7,19 +7,17 @@ import logging
 import threading
 import queue
 import time
-import os
 import tempfile
 import re
 from typing import Optional, Callable
 from pathlib import Path
 
 try:
-    from gtts import gTTS
-    import io
-    GTTS_AVAILABLE = True
+    from TTS.api import TTS as CoquiTTS
+    COQUI_TTS_AVAILABLE = True
 except ImportError:
-    GTTS_AVAILABLE = False
-    logging.warning("gTTS not available - using simulation mode")
+    COQUI_TTS_AVAILABLE = False
+    logging.warning("Coqui TTS not available - using simulation mode")
 
 try:
     import pygame
@@ -31,7 +29,7 @@ except ImportError:
 class RealtimeSpeechManager:
     """Real-time speech manager that speaks words as they're generated"""
     
-    def __init__(self, volume: float = 0.9, language: str = 'en', slow: bool = False):
+    def __init__(self, volume: float = 0.9, language: str = 'en', slow: bool = False, model_name: Optional[str] = None):
         self.logger = logging.getLogger(__name__)
         self.volume = volume
         self.language = language
@@ -41,6 +39,8 @@ class RealtimeSpeechManager:
         self.speech_thread = None
         self.stop_speaking = False
         self.temp_dir = Path(tempfile.gettempdir()) / "glasses_realtime_tts"
+        self.tts_engine = None
+        self.model_name = model_name or "tts_models/en/vctk/vits"
         
         # Real-time settings
         self.word_delay = 0.1  # Delay between words (seconds)
@@ -56,6 +56,9 @@ class RealtimeSpeechManager:
         
         # Initialize audio mixer
         self.initialize_audio()
+
+        # Initialize TTS engine
+        self.initialize_tts()
         
         # Start speech worker thread
         self.start_speech_worker()
@@ -157,23 +160,33 @@ class RealtimeSpeechManager:
         finally:
             self.is_speaking = False
     
+    def initialize_tts(self, model_name: Optional[str] = None):
+        """Initialize the offline TTS engine"""
+        if not COQUI_TTS_AVAILABLE:
+            self.logger.warning("Coqui TTS library not available - running in simulation mode")
+            return
+
+        model_to_use = model_name or self.model_name
+        try:
+            self.tts_engine = CoquiTTS(model_to_use)
+            self.model_name = model_to_use
+            self.logger.info(f"Coqui TTS engine initialized with model '{model_to_use}'")
+        except Exception as e:
+            self.tts_engine = None
+            self.logger.error(f"Failed to initialize Coqui TTS engine: {e}")
+
     def _speak_chunk(self, chunk_text: str):
         """Speak a small chunk of text"""
-        if not GTTS_AVAILABLE or not PYGAME_AVAILABLE:
+        if not self.tts_engine or not PYGAME_AVAILABLE:
             # Simulation mode
             self.logger.info(f"[SIMULATION] Speaking chunk: {chunk_text}")
             return
-        
+
         try:
             # Generate speech for this chunk
-            tts = gTTS(text=chunk_text, lang=self.language, slow=self.slow)
-            
-            # Create temporary file
-            temp_file = self.temp_dir / f"realtime_{int(time.time() * 1000)}.mp3"
-            
-            # Save audio to temporary file
-            tts.save(str(temp_file))
-            
+            temp_file = self.temp_dir / f"realtime_{int(time.time() * 1000)}.wav"
+            self.tts_engine.tts_to_file(text=chunk_text, file_path=str(temp_file))
+
             # Play audio file
             pygame.mixer.music.load(str(temp_file))
             pygame.mixer.music.play()
@@ -203,20 +216,15 @@ class RealtimeSpeechManager:
         self.is_speaking = True
         
         try:
-            if GTTS_AVAILABLE and PYGAME_AVAILABLE:
-                # Generate speech with gTTS
-                tts = gTTS(text=text, lang=self.language, slow=self.slow)
-                
-                # Create temporary file
-                temp_file = self.temp_dir / f"speech_{int(time.time() * 1000)}.mp3"
-                
-                # Save audio to temporary file
-                tts.save(str(temp_file))
-                
+            if self.tts_engine and PYGAME_AVAILABLE:
+                # Generate speech with Coqui TTS
+                temp_file = self.temp_dir / f"speech_{int(time.time() * 1000)}.wav"
+                self.tts_engine.tts_to_file(text=text, file_path=str(temp_file))
+
                 # Play audio file
                 pygame.mixer.music.load(str(temp_file))
                 pygame.mixer.music.play()
-                
+
                 # Wait for playback to complete
                 while pygame.mixer.music.get_busy():
                     time.sleep(0.1)
@@ -230,7 +238,7 @@ class RealtimeSpeechManager:
                 # Simulation mode
                 self.logger.info(f"[SIMULATION] Speaking: {text}")
                 # Simulate speaking time based on text length
-                speaking_time = len(text) * 0.08  # ~80ms per character for gTTS
+                speaking_time = len(text) * 0.08  # Approximate speaking time
                 time.sleep(max(1, speaking_time))
                 
         except Exception as e:
@@ -387,4 +395,4 @@ def test_realtime_speech():
         speech.cleanup()
 
 if __name__ == "__main__":
-    test_realtime_speech() 
+    test_realtime_speech()

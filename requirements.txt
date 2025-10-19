@@ -2,14 +2,18 @@
 openai>=1.0.0
 requests>=2.25.0
 Pillow>=9.0.0
-gTTS>=2.3.0
+TTS>=0.22.0
 pygame>=2.0.0
 
 # AI and Speech Recognition dependencies
 openai-whisper>=20231117
+torch>=2.0.0
 speechrecognition>=3.10.0
 pyaudio>=0.2.11
 numpy>=1.21.0
+sounddevice>=0.4.6
+tflite-runtime>=2.14.0
+pycoral>=3.0.0
 
 # Low-latency audio dependencies (Raspberry Pi optimized)
 pyalsaaudio>=0.9.0
@@ -25,4 +29,4 @@ opencv-python>=4.5.0
 
 # Development and testing
 pytest>=7.0.0
-pytest-cov>=4.0.0 
+pytest-cov>=4.0.0
