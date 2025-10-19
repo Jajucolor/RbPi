@@ -2,7 +2,7 @@
 openai>=1.0.0
 requests>=2.25.0
 Pillow>=9.0.0
-gTTS>=2.3.0
+TTS>=0.22.0
 pygame>=2.0.0
 
 # AI and Speech Recognition dependencies
@@ -25,4 +25,4 @@ opencv-python>=4.5.0
 
 # Development and testing
 pytest>=7.0.0
-pytest-cov>=4.0.0 
+pytest-cov>=4.0.0
