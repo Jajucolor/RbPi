@@ -39,6 +39,9 @@ except ImportError:
 
 from modules.camera_manager import CameraManager
 from modules.vision_analyzer import VisionAnalyzer
+from modules.kws_manager import EdgeTPUKeywordSpotter
+from modules.object_detector import EdgeTPUObjectDetector
+from modules.pose_tracker import MoveNetPoseTracker
 #from modules.sensor_manager import NavigationSensorManager
 
 # 추곽가과제로그형식
@@ -63,7 +66,12 @@ class IntaAIAssistant:
         self.whisper_device = None
         self.whisper_fp16 = False
         self.tts_engine = None
-        
+        self.keyword_spotter = None
+        self.keyword_acknowledgement = ""
+        self.keyword_timeout = None
+        self.object_detector = None
+        self.pose_tracker = None
+
         # 내비게이션 모니터링 상태
         self.navigation_active = False
         self.navigation_thread = None
@@ -80,7 +88,10 @@ class IntaAIAssistant:
         self.setup_recognizer()
         self.setup_whisper_engine()
         self.setup_tts_engine()
-        
+        self.setup_keyword_spotter()
+        self.setup_object_detector()
+        self.setup_pose_tracker()
+
         # 보조 안경 모듈 초기화
         self.initialize_assistive_modules()
         
@@ -143,8 +154,28 @@ class IntaAIAssistant:
                 "model_name": "tts_models/en/vctk/vits"
             },
             "system": {
-                "wake_word": "hey assistant",
                 "log_responses": True
+            },
+            "keyword_spotter": {
+                "model_path": "models/hey_glasses_edgetpu.tflite",
+                "label_path": "models/kws_labels.txt",
+                "fallback_phrase": "hey glasses",
+                "score_threshold": 0.6,
+                "frame_duration": 0.5,
+                "sample_rate": 16000,
+                "acknowledgement": "Yes, I'm listening.",
+                "listening_timeout": None,
+                "startup_prompt": "Assistive glasses are ready. Say 'Hey Glasses' to wake me."
+            },
+            "object_detection": {
+                "model_path": "models/efficientdet_lite0_edgetpu.tflite",
+                "label_path": "models/efficientdet_labels.txt",
+                "score_threshold": 0.35,
+                "top_k": 10
+            },
+            "pose_tracking": {
+                "model_path": "models/movenet_single_pose_edgetpu.tflite",
+                "min_confidence": 0.3
             },
             "hardware": {
                 "camera_enabled": True,
@@ -250,6 +281,81 @@ class IntaAIAssistant:
         except Exception as e:
             self.logger.error(f"Failed to initialize offline TTS engine: {e}")
             self.tts_engine = None
+
+    def setup_keyword_spotter(self):
+        kws_config = self.config.get("keyword_spotter", {})
+        model_path = kws_config.get("model_path")
+
+        if not model_path:
+            self.logger.warning("Keyword spotter model path not configured. Wake word detection disabled.")
+            self.keyword_spotter = None
+            return
+
+        fallback_phrase = kws_config.get("fallback_phrase", "hey glasses")
+        label_path = kws_config.get("label_path")
+        score_threshold = float(kws_config.get("score_threshold", 0.6))
+        frame_duration = float(kws_config.get("frame_duration", 0.5))
+        sample_rate = int(kws_config.get("sample_rate", 16000))
+        top_k = int(kws_config.get("top_k", 3))
+
+        try:
+            self.keyword_spotter = EdgeTPUKeywordSpotter(
+                model_path=model_path,
+                label_path=label_path,
+                sample_rate=sample_rate,
+                frame_duration=frame_duration,
+                score_threshold=score_threshold,
+                top_k=top_k,
+                fallback_phrase=fallback_phrase,
+            )
+            self.keyword_timeout = kws_config.get("listening_timeout")
+            self.keyword_acknowledgement = kws_config.get(
+                "acknowledgement", "Yes, I'm listening."
+            )
+            self.logger.info("Keyword spotter configured")
+        except Exception as e:
+            self.logger.error(f"Failed to initialise keyword spotter: {e}")
+            self.keyword_spotter = None
+
+    def setup_object_detector(self):
+        detection_config = self.config.get("object_detection", {})
+        model_path = detection_config.get("model_path")
+
+        if not model_path:
+            self.logger.info("Object detection model not configured. Quick scans disabled.")
+            self.object_detector = None
+            return
+
+        try:
+            self.object_detector = EdgeTPUObjectDetector(
+                model_path=model_path,
+                label_path=detection_config.get("label_path"),
+                score_threshold=float(detection_config.get("score_threshold", 0.3)),
+                top_k=int(detection_config.get("top_k", 10)),
+            )
+            self.logger.info("Edge TPU object detector configured")
+        except Exception as e:
+            self.logger.error(f"Failed to initialise object detector: {e}")
+            self.object_detector = None
+
+    def setup_pose_tracker(self):
+        pose_config = self.config.get("pose_tracking", {})
+        model_path = pose_config.get("model_path")
+
+        if not model_path:
+            self.logger.info("Pose tracking model not configured. Person tracking disabled.")
+            self.pose_tracker = None
+            return
+
+        try:
+            self.pose_tracker = MoveNetPoseTracker(
+                model_path=model_path,
+                min_confidence=float(pose_config.get("min_confidence", 0.25)),
+            )
+            self.logger.info("MoveNet pose tracker configured")
+        except Exception as e:
+            self.logger.error(f"Failed to initialise pose tracker: {e}")
+            self.pose_tracker = None
 
     def initialize_assistive_modules(self):
         # camera,vision, sensor manager 이잉
@@ -393,10 +499,12 @@ class IntaAIAssistant:
             Available commands and their contextual variations:
 
             CAMERA & VISION COMMANDS:
-            - capture_image: "take a picture", "what do you see", "describe what's around me", "show me my surroundings", "what's in front of me"
-            - describe_surroundings: "what's the environment like", "describe the area", "what's around here", "tell me about this place"
+            - scan_surroundings: "do a quick scan", "what's around", "anything nearby", "quick check", "do you see anyone"
+            - describe_surroundings: "what's the environment like", "give me details", "describe the area", "tell me about this place"
+            - capture_image: "take a picture", "show me my surroundings", "save what you see"
             - read_text: "read that sign", "what does that say", "read the text", "what's written there", "read the label"
             - identify_objects: "what objects do you see", "what's that thing", "identify what's there", "what items are visible"
+            - locate_people: "where is everyone", "is anyone nearby", "who's around", "where's the person"
 
             NAVIGATION & SENSOR COMMANDS:
             - navigate: "help me walk", "is it safe to move forward", "guide me", "help me navigate", "which way should I go", "start navigation", "begin navigation"
@@ -421,11 +529,17 @@ class IntaAIAssistant:
             If it doesn't match any command, respond with:
             [natural response]
 
+            PRIORITISE EDGE TPU FLOWS:
+            - If the user needs a quick situational check, use COMMAND: scan_surroundings (runs fast Edge TPU detection without LLM analysis)
+            - If the user wants a detailed description, use COMMAND: describe_surroundings (captures and sends to the vision LLM)
+            - If the user asks about people or their positions, use COMMAND: locate_people (runs MoveNet pose tracking and provides guidance)
+
             Be intelligent and contextual. Users may say things like:
             - "I can't see what's ahead" → COMMAND: obstacles
-            - "What's in this room?" → COMMAND: describe_surroundings  
+            - "What's in this room?" → COMMAND: scan_surroundings for a quick check, or describe_surroundings if they emphasise detail
             - "I need to read something" → COMMAND: read_text
             - "Is it safe to walk?" → COMMAND: navigate
+            - "Where is that person?" → COMMAND: locate_people
             - "What's that object?" → COMMAND: identify_objects"""
 
             messages = [
@@ -515,13 +629,7 @@ class IntaAIAssistant:
         if not user_input:
             self.text_to_speech("I didn't catch that. Could you please repeat?")
             return False
-        
-        # wake word 확인(assistant)
-        wake_word = self.config["system"]["wake_word"].lower()
-        if wake_word and wake_word not in user_input.lower():
-            self.logger.info("Wake word not detected, ignoring input")
-            return False
-        
+
         # AI 응답 생성
         ai_response = self.generate_ai_response(user_input)
         
@@ -597,15 +705,15 @@ class IntaAIAssistant:
             elif command_name == "capture_image":
                 return self.capture_and_analyze_image("general")
                 
-            elif command_name == "describe_surroundings":
-                return self.capture_and_analyze_image("surroundings")
-                
             elif command_name == "read_text":
                 return self.capture_and_analyze_image("text")
                 
-            elif command_name == "identify_objects":
-                return self.capture_and_analyze_image("objects")
-            
+            elif command_name in {"scan_surroundings", "quick_scan", "identify_objects"}:
+                return self.perform_quick_scan()
+
+            elif command_name in {"describe_surroundings", "detailed_surroundings"}:
+                return self.capture_and_analyze_image("surroundings")
+
             # 내비게이션 및 센서 명령
             elif command_name == "navigate":
                 return self.start_navigation_monitoring()
@@ -621,6 +729,9 @@ class IntaAIAssistant:
                 
             elif command_name == "obstacles":
                 return self.detect_obstacles()
+
+            elif command_name in {"locate_people", "pose_tracking", "find_people"}:
+                return self.perform_pose_tracking()
                 
             elif command_name == "weather":
                 return "I understand you want weather information. This feature requires weather API integration which is not currently available."
@@ -666,6 +777,90 @@ class IntaAIAssistant:
         except Exception as e:
             self.logger.error(f"Error in image capture and analysis: {e}")
             return "An error occurred during image analysis. Please try again."
+
+    def perform_quick_scan(self):
+        try:
+            if not self.camera_manager:
+                return "Camera is not available."
+
+            if not self.object_detector:
+                return "Edge TPU object detection is unavailable."
+
+            image_path = self.camera_manager.capture_image()
+            if not image_path:
+                return "Failed to capture an image for scanning."
+
+            detections = self.object_detector.detect(image_path)
+            summary = self.object_detector.summarise(detections)
+            self.logger.info(f"Quick scan summary: {summary}")
+            return summary
+        except Exception as e:
+            self.logger.error(f"Error during quick scan: {e}")
+            return "I wasn't able to analyse the surroundings just now."
+
+    def perform_pose_tracking(self):
+        try:
+            if not self.camera_manager:
+                return "Camera is not available."
+
+            if not self.pose_tracker:
+                return "Pose tracking is unavailable."
+
+            image_path = self.camera_manager.capture_image()
+            if not image_path:
+                return "Failed to capture an image for pose tracking."
+
+            poses = self.pose_tracker.detect(image_path)
+            spoken_summary = self.pose_tracker.describe(poses)
+            llm_summary = self.pose_tracker.summarise_for_llm(poses)
+
+            if not poses:
+                return spoken_summary
+
+            guidance = self.generate_pose_guidance(spoken_summary, llm_summary)
+            return guidance
+        except Exception as e:
+            self.logger.error(f"Error during pose tracking: {e}")
+            return "I couldn't analyse people's positions right now."
+
+    def generate_pose_guidance(self, spoken_summary: str, structured_summary: str) -> str:
+        if not OLLAMA_AVAILABLE:
+            return spoken_summary
+
+        try:
+            ollama_host = self.config["ai"].get("ollama_host")
+            client = ollama.Client(host=ollama_host) if ollama_host else ollama
+
+            system_prompt = (
+                "You translate pose detection data into concise spoken guidance for a visually impaired person. "
+                "Keep responses under three sentences and emphasise directions like left, right, or ahead."
+            )
+
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": (
+                        "Structured pose data from sensors: "
+                        f"{structured_summary}. Provide friendly guidance using this information."
+                    ),
+                },
+            ]
+
+            options = {}
+            if "temperature" in self.config["ai"]:
+                options["temperature"] = float(self.config["ai"]["temperature"])
+            if "max_tokens" in self.config["ai"]:
+                options["num_predict"] = int(self.config["ai"]["max_tokens"])
+
+            response = client.chat(model=self.config["ai"].get("model", "llama3.2:11b"), messages=messages, options=options)
+            content = response.get("message", {}).get("content")
+            if content:
+                return content
+        except Exception as e:
+            self.logger.error(f"Pose guidance generation failed: {e}")
+
+        return spoken_summary
     
     def check_navigation_safety(self):
         # 네비게이션 --> 카메라와 센서
@@ -830,10 +1025,10 @@ class IntaAIAssistant:
         return """I am INTA, your AI assistant for visually impaired users. I can help you with:
 
 CAMERA & VISION:
-- Take pictures and describe what I see
+- Perform quick Edge TPU scans to call out nearby objects in real-time
 - Read text and signs for you
-- Identify objects in your environment
-- Describe your surroundings
+- Provide detailed scene descriptions when you need more context
+- Track people and explain where they are around you
 
 NAVIGATION & SAFETY:
 - Start continuous navigation monitoring with real-time obstacle detection
@@ -849,7 +1044,10 @@ UTILITIES:
 - Check system status
 - Provide help information
 
-NAVIGATION COMMANDS:
+COMMAND SHORTCUTS:
+- "Quick scan" or "What's around" - Fast Edge TPU surroundings check
+- "Describe surroundings" or "Give me details" - Full vision analysis
+- "Locate people" or "Who's nearby" - Pose-aware guidance
 - "Start navigation" or "Help me walk" - Begin continuous monitoring
 - "Stop navigation" or "Stop guiding me" - End monitoring
 - "Navigation status" - Check if monitoring is active
@@ -859,17 +1057,37 @@ Just speak naturally! I understand context, so you can say things like:
     
     def start(self):
         # 시스템 루프
-        self.logger.info("Starting Simple STT System...")
+        self.logger.info("Starting INTA AI Assistant with Edge TPU keyword spotting...")
         self.running = True
-        
-        # ㅎㅇ
-        self.text_to_speech("Assistance glasses is ready. Start speaking!")
-        
+
+        if self.keyword_spotter:
+            ready_prompt = self.config.get("keyword_spotter", {}).get(
+                "startup_prompt",
+                "Assistive glasses are ready. Say 'Hey Glasses' when you need me.",
+            )
+        else:
+            ready_prompt = "Assistive glasses is ready. Start speaking!"
+
+        self.text_to_speech(ready_prompt)
+
         try:
             while self.running:
+                if self.keyword_spotter:
+                    keyword = self.keyword_spotter.listen_for_keyword(
+                        timeout=self.keyword_timeout
+                    )
+                    if not keyword:
+                        continue
+
+                    self.logger.info(f"Activation keyword received: {keyword}")
+                    if self.keyword_acknowledgement:
+                        self.text_to_speech(self.keyword_acknowledgement)
+                else:
+                    self.logger.debug("Keyword spotter unavailable - direct listening mode")
+
                 self.process_conversation()
                 time.sleep(0.1)  # Small delay to prevent CPU overuse
-                
+
         except KeyboardInterrupt:
             self.logger.info("Received keyboard interrupt")
             self.shutdown()

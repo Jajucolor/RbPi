@@ -9,10 +9,10 @@ INTA AI is an intelligent voice assistant designed for assistive glasses, provid
 ## **Key Features**
 
 ### **Advanced Speech Recognition**
-- **Wake Word System**: INTA responds only when called by name ("INTA", "Hey INTA", etc.)
-- **Speech Recognition Library**: Cross-platform compatibility with automatic microphone detection
-- **Whisper Integration**: Offline speech recognition with multiple model options
-- **Real-time Processing**: Continuous listening with voice activity detection
+- **Edge TPU Keyword Spotting**: Ultra-low-power wake phrase detection ("Hey Glasses") on Coral hardware
+- **Offline Whisper STT**: Local transcription with configurable models and device selection
+- **SpeechRecognition Guardrails**: Microphone auto-detection with ambient noise calibration
+- **Power-aware Flow**: Only capture speech after keyword activation to avoid false triggers
 - **Ambient Noise Adjustment**: Automatic sensitivity adjustment for different environments
 
 ### **AI-Powered Conversations**
@@ -23,9 +23,9 @@ INTA AI is an intelligent voice assistant designed for assistive glasses, provid
 - **Context Awareness**: Maintains conversation history for better interactions
 
 ### **Computer Vision**
-- **Raspberry Pi Camera**: High-quality image capture and analysis
-- **OpenAI Vision API**: Advanced image description and object recognition
-- **Real-time Analysis**: Instant environment assessment and description
+- **Edge TPU Object Detection**: EfficientDet/SSD pipelines for fast surroundings checks
+- **Pose Tracking**: MoveNet running locally to describe where people are located
+- **Detailed LLM Analysis**: Vision LLM integration when the user requests deeper descriptions
 - **Text Recognition**: OCR capabilities for reading text in images
 
 ### **Performance Optimizations**
@@ -152,12 +152,12 @@ python main.py
 ## **Speech Recognition System**
 
 ### **Features**
-- **Wake Word Activation**: INTA only responds when called by name ("INTA", "Hey INTA", etc.)
+- **Edge TPU Keyword Spotting**: Dedicated Coral model listens for "Hey Glasses" and other phrases without taxing the CPU
 - **Automatic Microphone Detection**: No manual device selection needed
 - **Cross-platform Compatibility**: Works on Windows, macOS, and Linux
 - **Offline Whisper Recognition**: Configurable local transcription with multiple model sizes
 - **Ambient Noise Adjustment**: Automatic sensitivity adjustment
-- **Real-time Processing**: Continuous listening with voice activity detection
+- **Power-aware Activation**: Speech capture only begins after the keyword is confirmed
 
 ### **Whisper Model Options**
 
@@ -174,10 +174,10 @@ python main.py
 #### **For Raspberry Pi:**
 ```json
 {
-  "inta": {
-      "sample_rate": 16000,
-      "chunk_size": 1024,
-      "energy_threshold": 300,
+  "stt": {
+      "timeout": 5,
+      "phrase_time_limit": 6,
+      "energy_threshold": 250,
       "whisper_model": "tiny"
   }
 }
@@ -186,9 +186,9 @@ python main.py
 #### **For Windows/Desktop:**
 ```json
 {
-  "inta": {
-      "sample_rate": 16000,
-      "chunk_size": 1024,
+  "stt": {
+      "timeout": 7,
+      "phrase_time_limit": 8,
       "energy_threshold": 200,
       "whisper_model": "base"
   }
@@ -197,30 +197,26 @@ python main.py
 
 ---
 
-## **Wake Word System**
+## **Edge TPU Keyword Spotting**
 
 ### **How It Works**
-- **Wake Word Detection**: INTA continuously listens for its name ("INTA", "Hey INTA", etc.)
-- **Activation**: When the wake word is detected, INTA responds with "Yes, I'm listening. How can I help you?"
-- **Command Mode**: After wake word activation, INTA listens for your command for 5 seconds
-- **Timeout**: If no command is given within 5 seconds, INTA returns to sleep mode
-
-### **Wake Word Variations**
-- **"INTA"** - Simple and direct
-- **"Hey INTA"** - Casual and friendly
-- **"Hello INTA"** - Formal greeting
-- **"Hi INTA"** - Informal greeting
-- **"Okay INTA"** - Confirmation style
-- **"Listen INTA"** - Attention seeking
-- **"Attention INTA"** - Formal attention
+- **On-device detection**: A compact TFLite model compiled for the Coral Edge TPU listens for phrases such as "Hey Glasses".
+- **Low-power standby**: The Coral accelerator handles audio classification so the CPU and Whisper STT remain idle until needed.
+- **Immediate acknowledgement**: When a keyword is confirmed, the assistant speaks the acknowledgement phrase and opens the microphone.
+- **False trigger reduction**: Adjust score thresholds, frame durations, and sample rates in `config.json` to suit your environment.
 
 ### **Configuration**
 ```json
 {
-  "inta": {
-      "wake_word": "inta",
-      "wake_word_confidence": 0.7,
-      "wake_word_timeout": 5.0
+  "keyword_spotter": {
+      "model_path": "models/hey_glasses_edgetpu.tflite",
+      "label_path": "models/kws_labels.txt",
+      "fallback_phrase": "hey glasses",
+      "score_threshold": 0.6,
+      "frame_duration": 0.5,
+      "sample_rate": 16000,
+      "acknowledgement": "Yes, I'm listening.",
+      "listening_timeout": null
   }
 }
 ```
@@ -309,11 +305,10 @@ python main.py
 
 ## **Custom Commands**
 
-### **Wake Word Usage**
-- **"INTA"** - Basic wake word
-- **"Hey INTA"** - Casual wake word
-- **"Hello INTA"** - Formal wake word
-- **"Listen INTA"** - Attention wake word
+### **Keyword Spotting Tips**
+- Use "Hey Glasses" for the primary activation phrase (customise via the label file if needed)
+- Speak clearly within 0.5m of the microphones for best detection accuracy
+- Adjust `score_threshold` upwards to reduce false positives or downwards to make activation easier
 
 ### **Built-in Commands**
 - **"Take a picture"** - Capture and analyze environment
