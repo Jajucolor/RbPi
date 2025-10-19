@@ -6,11 +6,36 @@ import os
 from datetime import datetime
 import sys
 from pathlib import Path
-from gtts import gTTS
 import pygame
 import tempfile
-import os
-import openai
+
+try:
+    import ollama
+    OLLAMA_AVAILABLE = True
+except ImportError:
+    ollama = None
+    OLLAMA_AVAILABLE = False
+
+try:
+    import whisper
+    WHISPER_AVAILABLE = True
+except ImportError:
+    whisper = None
+    WHISPER_AVAILABLE = False
+
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    torch = None
+    TORCH_AVAILABLE = False
+
+try:
+    from TTS.api import TTS as CoquiTTS
+    COQUI_TTS_AVAILABLE = True
+except ImportError:
+    CoquiTTS = None
+    COQUI_TTS_AVAILABLE = False
 
 from modules.camera_manager import CameraManager
 from modules.vision_analyzer import VisionAnalyzer
@@ -33,6 +58,11 @@ class IntaAIAssistant:
         self.running = False
         self.microphone = None
         self.recognizer = None
+        self.whisper_model = None
+        self.whisper_model_name = None
+        self.whisper_device = None
+        self.whisper_fp16 = False
+        self.tts_engine = None
         
         # 내비게이션 모니터링 상태
         self.navigation_active = False
@@ -48,6 +78,8 @@ class IntaAIAssistant:
         # 컴포넌트 초기화
         self.setup_microphone()
         self.setup_recognizer()
+        self.setup_whisper_engine()
+        self.setup_tts_engine()
         
         # 보조 안경 모듈 초기화
         self.initialize_assistive_modules()
@@ -64,8 +96,10 @@ class IntaAIAssistant:
 
     
     def setup_audio_system(self):
-        try:    
+        try:
             pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
+            volume = self.config.get("tts", {}).get("volume", 0.9)
+            pygame.mixer.music.set_volume(volume)
             self.logger.info("Audio system initialized successfully")
         except Exception as e:
             self.logger.error(f"Failed to initialize audio system: {e}")
@@ -92,7 +126,10 @@ class IntaAIAssistant:
                 "phrase_threshold": 0.3,
                 "ambient_noise_duration": 2,
                 "timeout": 5,
-                "phrase_time_limit": 5
+                "phrase_time_limit": 5,
+                "whisper_model": "base",
+                "whisper_device": "auto",
+                "language": None
             },
             "ai": {
                 "model": "gpt-4o-mini",
@@ -102,7 +139,8 @@ class IntaAIAssistant:
             },
             "tts": {
                 "rate": 200,
-                "volume": 0.9
+                "volume": 0.9,
+                "model_name": "tts_models/en/vctk/vits"
             },
             "system": {
                 "wake_word": "hey assistant",
@@ -150,7 +188,7 @@ class IntaAIAssistant:
     def setup_recognizer(self):
         # 음성인식 설정
         self.recognizer = sr.Recognizer()
-        
+
         # 설정에서 인식기 세팅 구성
         stt_config = self.config["stt"]
         self.recognizer.energy_threshold = stt_config["energy_threshold"]
@@ -158,9 +196,61 @@ class IntaAIAssistant:
         self.recognizer.pause_threshold = stt_config["pause_threshold"]
         self.recognizer.non_speaking_duration = stt_config["non_speaking_duration"]
         self.recognizer.phrase_threshold = stt_config["phrase_threshold"]
-        
+
         self.logger.info("Speech recognizer configured")
-    
+
+    def setup_whisper_engine(self):
+        """Initialize the offline Whisper speech recognition engine"""
+        if not WHISPER_AVAILABLE:
+            self.logger.warning("Whisper library not available. Offline STT will be disabled.")
+            self.whisper_model = None
+            return
+
+        stt_config = self.config.get("stt", {})
+        model_name = stt_config.get("whisper_model", "base")
+        preferred_device = stt_config.get("whisper_device", "auto")
+        preferred_device_str = preferred_device.lower() if isinstance(preferred_device, str) else preferred_device
+
+        if preferred_device_str == "auto":
+            if TORCH_AVAILABLE and torch.cuda.is_available():
+                device = "cuda"
+            else:
+                device = "cpu"
+        else:
+            device = preferred_device_str if isinstance(preferred_device_str, str) else preferred_device
+
+        fp16 = device.lower().startswith("cuda") if isinstance(device, str) else False
+
+        try:
+            self.logger.info(
+                f"Loading Whisper offline model '{model_name}' on device '{device}'"
+            )
+            self.whisper_model = whisper.load_model(model_name, device=device)
+            self.whisper_model_name = model_name
+            self.whisper_device = device
+            self.whisper_fp16 = fp16
+            self.logger.info("Whisper offline engine initialized successfully")
+        except Exception as e:
+            self.logger.error(f"Failed to load Whisper model '{model_name}': {e}")
+            self.whisper_model = None
+
+    def setup_tts_engine(self):
+        """Initialize the offline TTS engine"""
+        tts_config = self.config.get("tts", {})
+        model_name = tts_config.get("model_name", "tts_models/en/vctk/vits")
+
+        if not COQUI_TTS_AVAILABLE or CoquiTTS is None:
+            self.logger.warning("Coqui TTS library not available. Offline TTS will fall back to console output.")
+            self.tts_engine = None
+            return
+
+        try:
+            self.tts_engine = CoquiTTS(model_name)
+            self.logger.info(f"Offline TTS engine initialized with model '{model_name}'")
+        except Exception as e:
+            self.logger.error(f"Failed to initialize offline TTS engine: {e}")
+            self.tts_engine = None
+
     def initialize_assistive_modules(self):
         # camera,vision, sensor manager 이잉
         try:
@@ -216,6 +306,7 @@ class IntaAIAssistant:
             
             # 음성 인식
             self.logger.info("Listening for speech...")
+            print("[Whisper] Listening...")
             with self.microphone as source:
                 try:
                     audio = self.recognizer.listen(
@@ -237,27 +328,57 @@ class IntaAIAssistant:
 
     
     def speech_to_text(self, audio):
-        # google speech_recognition 을 활용한 stt
-        try:
-            text = self.recognizer.recognize_google(audio)
-            self.logger.info(f"Recognized speech: '{text}'")
-            return text
-            
-        except sr.UnknownValueError:
-            self.logger.warning("Google Speech Recognition could not understand audio")
+        """Transcribe audio using the offline Whisper model"""
+        if not self.whisper_model:
+            self.logger.error("Whisper STT is unavailable - offline model not initialized")
             return None
-        except sr.RequestError as e:
-            self.logger.error(f"Google Speech Recognition service error: {e}")
-            return None
-        except Exception as e:
-            self.logger.error(f"Error in speech recognition: {e}")
-            return None
-    
-    # at top of the file
-    import ollama
 
+        stt_config = self.config.get("stt", {})
+        language = stt_config.get("language")
+        if isinstance(language, str) and language.strip().lower() in {"", "auto"}:
+            language = None
+
+        temp_file_path = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio:
+                temp_audio.write(audio.get_wav_data())
+                temp_file_path = temp_audio.name
+
+            transcription = self.whisper_model.transcribe(
+                temp_file_path,
+                fp16=self.whisper_fp16,
+                language=language,
+            )
+
+            if not transcription:
+                self.logger.warning("No transcription returned from Whisper")
+                return None
+
+            text = transcription.get("text", "").strip()
+            if not text:
+                self.logger.info("Whisper transcription was empty")
+                return None
+
+            self.logger.info(f"Whisper recognized speech: '{text}'")
+            print(f"[Whisper] User said: {text}")
+            return text
+
+        except Exception as e:
+            self.logger.error(f"Error in Whisper speech recognition: {e}")
+            return None
+        finally:
+            if temp_file_path and os.path.exists(temp_file_path):
+                try:
+                    os.remove(temp_file_path)
+                except OSError:
+                    pass
+    
     def generate_ai_response(self, user_input):
         # t2t? 로컬 Ollama에게 텍스트 보내고 답 받기
+        if not OLLAMA_AVAILABLE:
+            self.logger.error("Ollama client not available - cannot generate AI response")
+            return "AI response is unavailable because the Ollama client is not installed."
+
         try:
             # (옵션) 원격/커스텀 호스트를 쓰고 싶다면 config에 ollama_host를 넣으세요.
             # 예: "ollama_host": "http://127.0.0.1:11434"
@@ -340,32 +461,32 @@ class IntaAIAssistant:
         print(12311111111111111)
     
     def text_to_speech(self, text):
-        #gtts 를 이용한 tts 모델
+        # Offline TTS synthesis using Coqui TTS
+        if not text:
+            return
+
+        if not self.tts_engine:
+            self.logger.warning("Offline TTS engine unavailable - falling back to print output")
+            print(f"AI Response: {text}")
+            return
+
         try:
-            # 오디오를 위한 임시 파일 생성(이후에 gtts로 덮어쓴다)
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as fp:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as fp:
                 temp_filename = fp.name
-            
-            # 음성 생성
-            tts = gTTS(text=text, lang='en', slow=False)
-            tts.save(temp_filename)
-            
-            # 오디오 재생
+
+            self.tts_engine.tts_to_file(text=text, file_path=temp_filename)
+
             pygame.mixer.music.load(temp_filename)
             pygame.mixer.music.play()
-            
-            # 오디오가 끝날 때까지 대기
+
             while pygame.mixer.music.get_busy():
                 pygame.time.Clock().tick(10)
-            
-            # 정리
+
             os.unlink(temp_filename)
-            
-            self.logger.info(f"TTS completed: '{text}'")
-            
+            self.logger.info(f"Offline TTS completed: '{text}'")
+
         except Exception as e:
-            self.logger.error(f"Error in text-to-speech: {e}")
-            # 에러 발생 시 프린트로 대체
+            self.logger.error(f"Error in offline text-to-speech: {e}")
             print(f"AI Response: {text}")
     
     #def log_response(self, user_input, ai_response):

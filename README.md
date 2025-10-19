@@ -155,7 +155,7 @@ python main.py
 - **Wake Word Activation**: INTA only responds when called by name ("INTA", "Hey INTA", etc.)
 - **Automatic Microphone Detection**: No manual device selection needed
 - **Cross-platform Compatibility**: Works on Windows, macOS, and Linux
-- **Dual Recognition Engine**: Google Speech Recognition (online) + Whisper (offline)
+- **Offline Whisper Recognition**: Configurable local transcription with multiple model sizes
 - **Ambient Noise Adjustment**: Automatic sensitivity adjustment
 - **Real-time Processing**: Continuous listening with voice activity detection
 

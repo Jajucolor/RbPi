@@ -7,7 +7,10 @@
         "phrase_threshold": 0.3,
         "ambient_noise_duration": 2,
         "timeout": 5,
-        "phrase_time_limit": 5
+        "phrase_time_limit": 5,
+        "whisper_model": "base",
+        "whisper_device": "auto",
+        "language": null
     },
     "ai": {
         "provider": "ollama",
@@ -18,7 +21,8 @@
       },      
     "tts": {
         "rate": 200,
-        "volume": 0.9
+        "volume": 0.9,
+        "model_name": "tts_models/en/vctk/vits"
     },
     "system": {
         "wake_word": "hey assistant",
@@ -30,4 +34,4 @@
         "sensor_port": "/dev/ttyACM0",
         "sensor_baudrate": 9600
     }
-} 
+}

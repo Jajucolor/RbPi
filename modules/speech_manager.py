@@ -1,24 +1,22 @@
 """
 Speech Manager Module
-Handles text-to-speech functionality using gTTS for the assistive glasses system
+Handles offline text-to-speech functionality for the assistive glasses system
 """
 
 import logging
 import threading
 import queue
 import time
-import os
 import tempfile
 from typing import Optional
 from pathlib import Path
 
 try:
-    from gtts import gTTS
-    import io
-    GTTS_AVAILABLE = True
+    from TTS.api import TTS as CoquiTTS
+    COQUI_TTS_AVAILABLE = True
 except ImportError:
-    GTTS_AVAILABLE = False
-    logging.warning("gTTS not available - using simulation mode")
+    COQUI_TTS_AVAILABLE = False
+    logging.warning("Coqui TTS not available - using simulation mode")
 
 try:
     import pygame
@@ -28,7 +26,7 @@ except ImportError:
     logging.warning("pygame not available - audio playback may be limited")
 
 class SpeechManager:
-    """Manages text-to-speech functionality using gTTS for the assistive glasses"""
+    """Manages offline text-to-speech functionality using Coqui TTS"""
     
     def __init__(self, volume: float = 0.9, language: str = 'en', slow: bool = False):
         self.logger = logging.getLogger(__name__)
@@ -40,12 +38,17 @@ class SpeechManager:
         self.speech_thread = None
         self.stop_speaking = False
         self.temp_dir = Path(tempfile.gettempdir()) / "glasses_tts"
+        self.tts_engine = None
+        self.model_name = "tts_models/en/vctk/vits"
         
         # Create temp directory for audio files
         self.temp_dir.mkdir(exist_ok=True)
         
         # Initialize audio mixer
         self.initialize_audio()
+
+        # Initialize TTS engine
+        self.initialize_tts()
         
         # Start speech worker thread
         self.start_speech_worker()
@@ -94,28 +97,39 @@ class SpeechManager:
             except Exception as e:
                 self.logger.error(f"Error in speech worker: {str(e)}")
     
+    def initialize_tts(self, model_name: Optional[str] = None):
+        """Initialize the offline TTS engine"""
+        if not COQUI_TTS_AVAILABLE:
+            self.logger.warning("Coqui TTS library not available - running in simulation mode")
+            return
+
+        model_to_use = model_name or self.model_name
+        try:
+            self.tts_engine = CoquiTTS(model_to_use)
+            self.model_name = model_to_use
+            self.logger.info(f"Coqui TTS engine initialized with model '{model_to_use}'")
+        except Exception as e:
+            self.tts_engine = None
+            self.logger.error(f"Failed to initialize Coqui TTS engine: {e}")
+
     def _speak_text(self, text: str):
-        """Internal method to speak text using gTTS"""
+        """Internal method to speak text using Coqui TTS"""
         if not text.strip():
             return
-        
+
         self.is_speaking = True
-        
+
         try:
-            if GTTS_AVAILABLE and PYGAME_AVAILABLE:
-                # Generate speech with gTTS
-                tts = gTTS(text=text, lang=self.language, slow=self.slow)
-                
-                # Create temporary file
-                temp_file = self.temp_dir / f"speech_{int(time.time() * 1000)}.mp3"
-                
-                # Save audio to temporary file
-                tts.save(str(temp_file))
-                
+            if self.tts_engine and PYGAME_AVAILABLE:
+                temp_file = self.temp_dir / f"speech_{int(time.time() * 1000)}.wav"
+
+                # Generate speech with Coqui TTS
+                self.tts_engine.tts_to_file(text=text, file_path=str(temp_file))
+
                 # Play audio file
                 pygame.mixer.music.load(str(temp_file))
                 pygame.mixer.music.play()
-                
+
                 # Wait for playback to complete
                 while pygame.mixer.music.get_busy():
                     time.sleep(0.1)
@@ -124,12 +138,12 @@ class SpeechManager:
                 self._cleanup_temp_file(temp_file)
                 
                 self.logger.info(f"Speech completed: {text[:50]}...")
-                
+
             else:
                 # Simulation mode
                 self.logger.info(f"[SIMULATION] Speaking: {text}")
                 # Simulate speaking time based on text length
-                speaking_time = len(text) * 0.08  # ~80ms per character for gTTS
+                speaking_time = len(text) * 0.08  # Approximate speaking time per character
                 time.sleep(max(1, speaking_time))
                 
         except Exception as e:
@@ -223,17 +237,15 @@ class SpeechManager:
         self.logger.info(f"Voice properties updated: volume={self.volume}, language={self.language}, slow={self.slow}")
     
     def get_available_languages(self) -> list:
-        """Get list of available languages for gTTS"""
-        if not GTTS_AVAILABLE:
+        """Get list of available voices/models for the offline TTS engine"""
+        if not self.tts_engine:
             return []
-        
-        try:
-            from gtts.lang import tts_langs
-            langs = tts_langs()
-            return [{"code": code, "name": name} for code, name in langs.items()]
-        except Exception as e:
-            self.logger.error(f"Error getting available languages: {str(e)}")
-            return []
+
+        # Coqui models are language-specific; expose the currently loaded model
+        return [{
+            "code": self.model_name,
+            "name": f"Coqui TTS model ({self.model_name})"
+        }]
     
     def test_speech(self, test_text: str = "Hello, this is a test of the speech system."):
         """Test the speech system with a sample text"""
@@ -245,12 +257,14 @@ class SpeechManager:
         return {
             "is_speaking": self.is_speaking,
             "queue_size": self.speech_queue.qsize(),
-            "gtts_available": GTTS_AVAILABLE,
+            "coqui_available": COQUI_TTS_AVAILABLE,
             "pygame_available": PYGAME_AVAILABLE,
             "volume": self.volume,
             "language": self.language,
             "slow_speech": self.slow,
-            "temp_dir": str(self.temp_dir)
+            "temp_dir": str(self.temp_dir),
+            "tts_model": self.model_name,
+            "engine_initialized": self.tts_engine is not None
         }
     
     def _cleanup_temp_file(self, temp_file: Path, max_retries: int = 5):
@@ -280,7 +294,7 @@ class SpeechManager:
                 files_cleaned = 0
                 files_failed = 0
                 
-                for file in self.temp_dir.glob("*.mp3"):
+                for file in self.temp_dir.glob("*.wav"):
                     try:
                         # Use the improved cleanup method
                         self._cleanup_temp_file(file, max_retries=3)
@@ -335,7 +349,7 @@ def test_speech_manager():
     speech = SpeechManager()
     
     try:
-        print("Testing gTTS speech system...")
+        print("Testing offline speech system...")
         speech.test_speech()
         
         print("Status:", speech.get_speech_status())
@@ -351,4 +365,4 @@ def test_speech_manager():
         speech.cleanup()
 
 if __name__ == "__main__":
-    test_speech_manager() 
+    test_speech_manager()

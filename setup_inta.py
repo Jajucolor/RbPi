@@ -196,7 +196,7 @@ def test_installation():
         ("PyAudio", "import pyaudio"),
         ("OpenAI", "import openai"),
         ("Requests", "import requests"),
-        ("gTTS", "from gtts import gTTS"),
+        ("Coqui TTS", "from TTS.api import TTS"),
         ("Pygame", "import pygame")
     ]
     
