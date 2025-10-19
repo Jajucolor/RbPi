@@ -14,7 +14,7 @@ import openai
 
 from modules.camera_manager import CameraManager
 from modules.vision_analyzer import VisionAnalyzer
-from modules.sensor_manager import NavigationSensorManager
+#from modules.sensor_manager import NavigationSensorManager
 
 # 추곽가과제로그형식
 logging.basicConfig(
@@ -61,6 +61,7 @@ class IntaAIAssistant:
             )
         
         self.logger.info("INTA AI Assistant initialized")
+
     
     def setup_audio_system(self):
         try:    
@@ -172,19 +173,19 @@ class IntaAIAssistant:
                 self.logger.info("Camera disabled in configuration")
             
             # OpenAI API 키로 분석기 초기화
-            api_key = self.config["ai"]["api_key"]
-            if api_key != "your-openai-api-key-here":
-                self.vision_analyzer = VisionAnalyzer(api_key=api_key)
-                self.logger.info("Vision analyzer initialized with OpenAI API")
-            else:
-                self.vision_analyzer = VisionAnalyzer(api_key=None)
-                self.logger.info("Vision analyzer initialized in simulation mode")
+            # api_key = self.config["ai"]["api_key"]
+            # if api_key != "":
+            #     self.vision_analyzer = VisionAnalyzer(api_key=api_key)
+            #     self.logger.info("Vision analyzer initialized with OpenAI API")
+            # else:
+            #     self.vision_analyzer = VisionAnalyzer(api_key=None)
+            #     self.logger.info("Vision analyzer initialized in simulation mode")
             
             # 내비게이션 센서 매니저 초기화
             if self.config.get("hardware", {}).get("sensors_enabled", True):
                 sensor_port = self.config["hardware"]["sensor_port"]
                 sensor_baudrate = self.config["hardware"]["sensor_baudrate"]
-                self.sensor_monitor = NavigationSensorManager(port=sensor_port, baudrate=sensor_baudrate)
+                #self.sensor_monitor = NavigationSensorManager(port=sensor_port, baudrate=sensor_baudrate)
                 self.logger.info("Navigation sensor manager initialized")
             else:
                 self.sensor_monitor = None
@@ -232,6 +233,8 @@ class IntaAIAssistant:
         except Exception as e:
             self.logger.error(f"Error listening for speech: {e}")
             return None
+
+
     
     def speech_to_text(self, audio):
         # google speech_recognition 을 활용한 stt
@@ -250,19 +253,17 @@ class IntaAIAssistant:
             self.logger.error(f"Error in speech recognition: {e}")
             return None
     
+    # at top of the file
+    import ollama
+
     def generate_ai_response(self, user_input):
-        # t2t? openai에게 음성 정보 보내고 답 받기
+        # t2t? 로컬 Ollama에게 텍스트 보내고 답 받기
         try:
-            
-            # 설정에서 API...
-            api_key = self.config["ai"]["api_key"]
-            if api_key == "your-openai-api-key-here":
-                self.logger.warning("OpenAI API key not configured, using fallback response")
-                return f"I heard you say: '{user_input}'. Please configure your OpenAI API key in config.json."
-            
-            # OpenAI API 로 클라이언트 설정
-            client = openai.OpenAI(api_key=api_key)
-            
+            # (옵션) 원격/커스텀 호스트를 쓰고 싶다면 config에 ollama_host를 넣으세요.
+            # 예: "ollama_host": "http://127.0.0.1:11434"
+            ollama_host = self.config["ai"].get("ollama_host")
+            client = ollama.Client(host=ollama_host) if ollama_host else ollama
+
             # 프롬프트
             system_prompt = """You are INTA, an advanced AI assistant for visually impaired users. You have access to a camera, ultrasonic sensors, and infrared sensors to help users navigate and understand their environment. Do not say more than 3 sentences.
 
@@ -305,31 +306,38 @@ class IntaAIAssistant:
             - "I need to read something" → COMMAND: read_text
             - "Is it safe to walk?" → COMMAND: navigate
             - "What's that object?" → COMMAND: identify_objects"""
-            
+
             messages = [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_input}
+                {"role": "user", "content": user_input},
             ]
-            
-            # api 호출
-            response = client.chat.completions.create(
-                model=self.config["ai"]["model"],
-                messages=messages,
-                max_tokens=self.config["ai"]["max_tokens"],
-                temperature=self.config["ai"]["temperature"]
-            )
-            
-            ai_response = response.choices[0].message.content
-            
+
+            # Ollama 옵션 매핑: temperature, num_predict(=max_tokens)
+            options = {}
+            if "temperature" in self.config["ai"]:
+                options["temperature"] = float(self.config["ai"]["temperature"])
+            if "max_tokens" in self.config["ai"]:
+                options["num_predict"] = int(self.config["ai"]["max_tokens"])
+
+            # 모델 이름 예: "llama3:8b", "qwen2.5:7b", "gemma2:9b"
+            model_name = self.config["ai"].get("model", "llama3.2:11b")
+
+            resp = client.chat(model=model_name, messages=messages, options=options)
+            ai_response = resp["message"]["content"]
+
             # 상호작용 로그
-            if self.config["system"]["log_responses"]:
+            if self.config["system"].get("log_responses"):
                 self.log_response(user_input, ai_response)
-            
+
             return ai_response
-            
+
         except Exception as e:
-            self.logger.error(f"Error generating AI response: {e}")
+            self.logger.error(f"Error generating AI response (Ollama): {e}")
             return "I'm sorry, I couldn't process that request due to an error."
+        
+    def test():
+
+        print(12311111111111111)
     
     def text_to_speech(self, text):
         #gtts 를 이용한 tts 모델
