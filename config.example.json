@@ -1,13 +1,10 @@
 {
     "stt": {
-        "energy_threshold": 300,
-        "dynamic_energy_threshold": true,
-        "pause_threshold": 0.8,
-        "non_speaking_duration": 0.5,
-        "phrase_threshold": 0.3,
-        "ambient_noise_duration": 2,
-        "timeout": 5,
-        "phrase_time_limit": 5
+        "phrase_time_limit": 5,
+        "silence_threshold": 0.01,
+        "sample_rate": 16000,
+        "model": "whisper-1",
+        "language": "en"
     },
     "ai": {
         "provider": "ollama",
@@ -18,7 +15,8 @@
       },      
     "tts": {
         "rate": 200,
-        "volume": 0.9
+        "volume": 0.9,
+        "voice_id": null
     },
     "system": {
         "wake_word": "hey assistant",

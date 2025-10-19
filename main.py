@@ -1,16 +1,17 @@
 import logging
-import speech_recognition as sr
 import time
 import json
 import os
 from datetime import datetime
 import sys
 from pathlib import Path
-from gtts import gTTS
-import pygame
 import tempfile
-import os
-import openai
+
+import numpy as np
+import sounddevice as sd
+import soundfile as sf
+import pyttsx3
+from openai import OpenAI
 
 from modules.camera_manager import CameraManager
 from modules.vision_analyzer import VisionAnalyzer
@@ -27,12 +28,16 @@ logging.basicConfig(
 )
 
 class IntaAIAssistant:
-    
+
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self.running = False
-        self.microphone = None
-        self.recognizer = None
+        self.audio_input_ready = False
+        self.sample_rate = None
+        self.audio_channels = 1
+        self.tts_engine = None
+        self.openai_client = None
+        self.whisper_model = None
         
         # 내비게이션 모니터링 상태
         self.navigation_active = False
@@ -42,12 +47,10 @@ class IntaAIAssistant:
         # 설정 불러오기
         self.config = self.load_config()
         
-        # TTS를 위한 pygame mixer 초기화
+        # 오디오 시스템 초기화 (TTS, 입력 장치)
         self.setup_audio_system()
-        
-        # 컴포넌트 초기화
         self.setup_microphone()
-        self.setup_recognizer()
+        self.setup_stt_client()
         
         # 보조 안경 모듈 초기화
         self.initialize_assistive_modules()
@@ -64,12 +67,27 @@ class IntaAIAssistant:
 
     
     def setup_audio_system(self):
-        try:    
-            pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
-            self.logger.info("Audio system initialized successfully")
+        try:
+            self.tts_engine = pyttsx3.init()
+            tts_config = self.config.get("tts", {})
+
+            if "rate" in tts_config:
+                self.tts_engine.setProperty("rate", int(tts_config["rate"]))
+            if "volume" in tts_config:
+                self.tts_engine.setProperty("volume", float(tts_config["volume"]))
+
+            voice_id = tts_config.get("voice_id")
+            if voice_id is not None:
+                try:
+                    self.tts_engine.setProperty("voice", voice_id)
+                except Exception as e:
+                    self.logger.warning(f"Failed to set TTS voice '{voice_id}': {e}")
+
+            self.logger.info("Offline TTS engine initialized successfully")
         except Exception as e:
-            self.logger.error(f"Failed to initialize audio system: {e}")
+            self.logger.error(f"Failed to initialize offline TTS engine: {e}")
             self.logger.warning("Text-to-speech will use fallback (print only)")
+            self.tts_engine = None
     
     def load_config(self):
         #config 불러오기 
@@ -85,14 +103,11 @@ class IntaAIAssistant:
         # 디폴트 설정
         return {
             "stt": {
-                "energy_threshold": 300,
-                "dynamic_energy_threshold": True,
-                "pause_threshold": 0.8,
-                "non_speaking_duration": 0.5,
-                "phrase_threshold": 0.3,
-                "ambient_noise_duration": 2,
-                "timeout": 5,
-                "phrase_time_limit": 5
+                "phrase_time_limit": 5,
+                "silence_threshold": 0.01,
+                "sample_rate": 16000,
+                "model": "whisper-1",
+                "language": "en"
             },
             "ai": {
                 "model": "gpt-4o-mini",
@@ -102,7 +117,8 @@ class IntaAIAssistant:
             },
             "tts": {
                 "rate": 200,
-                "volume": 0.9
+                "volume": 0.9,
+                "voice_id": None
             },
             "system": {
                 "wake_word": "hey assistant",
@@ -117,49 +133,38 @@ class IntaAIAssistant:
         }
     
     def setup_microphone(self):
-        #마이크
         try:
-            # 사용 가능한 모든 마이크 나열
-            mics = sr.Microphone.list_microphone_names()
-            self.logger.info(f"Available microphones: {mics}")
-            
-            # 기본 마이크 먼저 시도
-            try:
-                self.microphone = sr.Microphone()
-                self.logger.info("Using default microphone")
-                return
-            except Exception as e:
-                self.logger.warning(f"Default microphone failed: {e}")
-            
-            # 다른 장치 구성 시도
-            for device_index in range(min(5, len(mics))):
-                try:
-                    self.microphone = sr.Microphone(device_index=device_index)
-                    self.logger.info(f"Using microphone device {device_index}")
-                    return
-                except Exception as e:
-                    self.logger.warning(f"Microphone {device_index} failed: {e}")
-                    continue
-            
-            raise Exception("No working microphone found")
-            
+            stt_config = self.config.get("stt", {})
+            self.sample_rate = int(stt_config.get("sample_rate", 16000))
+
+            sd.check_input_settings(samplerate=self.sample_rate, channels=self.audio_channels)
+            default_input = sd.default.device[0]
+            device_info = sd.query_devices(default_input, "input") if default_input is not None else sd.query_devices(kind="input")
+
+            self.logger.info(f"Using input device: {device_info['name'] if isinstance(device_info, dict) else 'default'}")
+            self.logger.info(f"Configured sample rate: {self.sample_rate} Hz")
+
+            self.audio_input_ready = True
+
         except Exception as e:
-            self.logger.error(f"Error setting up microphone: {e}")
+            self.logger.error(f"Error setting up audio input: {e}")
+            self.audio_input_ready = False
             raise
-    
-    def setup_recognizer(self):
-        # 음성인식 설정
-        self.recognizer = sr.Recognizer()
-        
-        # 설정에서 인식기 세팅 구성
-        stt_config = self.config["stt"]
-        self.recognizer.energy_threshold = stt_config["energy_threshold"]
-        self.recognizer.dynamic_energy_threshold = stt_config["dynamic_energy_threshold"]
-        self.recognizer.pause_threshold = stt_config["pause_threshold"]
-        self.recognizer.non_speaking_duration = stt_config["non_speaking_duration"]
-        self.recognizer.phrase_threshold = stt_config["phrase_threshold"]
-        
-        self.logger.info("Speech recognizer configured")
+
+    def setup_stt_client(self):
+        try:
+            api_key = self.config.get("ai", {}).get("api_key") or os.getenv("OPENAI_API_KEY")
+            if not api_key or api_key == "your-openai-api-key-here":
+                raise ValueError("A valid OpenAI API key is required for Whisper transcription")
+
+            self.openai_client = OpenAI(api_key=api_key)
+            self.whisper_model = self.config.get("stt", {}).get("model", "whisper-1")
+
+            self.logger.info(f"Whisper transcription model set to '{self.whisper_model}'")
+
+        except Exception as e:
+            self.logger.error(f"Error initializing Whisper client: {e}")
+            raise
     
     def initialize_assistive_modules(self):
         # camera,vision, sensor manager 이잉
@@ -200,58 +205,80 @@ class IntaAIAssistant:
     
     def listen_for_speech(self):
         # 음성 입력 인식
-        if not self.microphone:
-            self.logger.error("No microphone available")
+        if not self.audio_input_ready:
+            self.logger.error("Audio input is not ready")
             return None
-        
+
+        stt_config = self.config.get("stt", {})
+        record_seconds = float(stt_config.get("phrase_time_limit", 5))
+        silence_threshold = float(stt_config.get("silence_threshold", 0.01))
+
+        self.logger.info(f"Recording audio for up to {record_seconds} seconds...")
+
         try:
-            # 주변 소음 보정
-            #TODO: 잘 안되는 듯? -------> 필요함
-            self.logger.info("Adjusting for ambient noise... Please stay quiet.")
-            with self.microphone as source:
-                self.recognizer.adjust_for_ambient_noise(
-                    source, 
-                    duration=self.config["stt"]["ambient_noise_duration"]
-                )
-            
-            # 음성 인식
-            self.logger.info("Listening for speech...")
-            with self.microphone as source:
-                try:
-                    audio = self.recognizer.listen(
-                        source, 
-                        timeout=self.config["stt"]["timeout"],
-                        phrase_time_limit=self.config["stt"]["phrase_time_limit"]
-                    )
-                    self.logger.info("Audio captured successfully")
-                    return audio
-                    
-                except sr.WaitTimeoutError:
-                    self.logger.info("No speech detected within timeout")
-                    return None
-                    
+            audio_frames = sd.rec(
+                int(record_seconds * self.sample_rate),
+                samplerate=self.sample_rate,
+                channels=self.audio_channels,
+                dtype="float32"
+            )
+            sd.wait()
+
+            audio_array = np.squeeze(audio_frames)
+
+            if audio_array.size == 0:
+                self.logger.info("No audio data captured from microphone")
+                return None
+
+            if np.max(np.abs(audio_array)) < silence_threshold:
+                self.logger.info("Recorded audio is mostly silence")
+                return None
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio:
+                sf.write(temp_audio.name, audio_array, self.sample_rate)
+                temp_path = temp_audio.name
+
+            self.logger.info("Audio captured successfully")
+            return temp_path
+
         except Exception as e:
-            self.logger.error(f"Error listening for speech: {e}")
+            self.logger.error(f"Error recording audio: {e}")
             return None
 
 
     
-    def speech_to_text(self, audio):
-        # google speech_recognition 을 활용한 stt
+    def speech_to_text(self, audio_path):
+        if not audio_path:
+            return None
+
         try:
-            text = self.recognizer.recognize_google(audio)
+            language = self.config.get("stt", {}).get("language")
+
+            request_kwargs = {
+                "model": self.whisper_model,
+                "file": None,
+                "response_format": "text",
+            }
+
+            if language:
+                request_kwargs["language"] = language
+
+            with open(audio_path, "rb") as audio_file:
+                request_kwargs["file"] = audio_file
+                transcription = self.openai_client.audio.transcriptions.create(**request_kwargs)
+
+            text = transcription.strip()
             self.logger.info(f"Recognized speech: '{text}'")
             return text
-            
-        except sr.UnknownValueError:
-            self.logger.warning("Google Speech Recognition could not understand audio")
-            return None
-        except sr.RequestError as e:
-            self.logger.error(f"Google Speech Recognition service error: {e}")
-            return None
+
         except Exception as e:
-            self.logger.error(f"Error in speech recognition: {e}")
+            self.logger.error(f"Error during Whisper transcription: {e}")
             return None
+        finally:
+            try:
+                os.unlink(audio_path)
+            except Exception:
+                pass
     
     # at top of the file
     import ollama
@@ -340,32 +367,19 @@ class IntaAIAssistant:
         print(12311111111111111)
     
     def text_to_speech(self, text):
-        #gtts 를 이용한 tts 모델
+        if not text:
+            return
+
         try:
-            # 오디오를 위한 임시 파일 생성(이후에 gtts로 덮어쓴다)
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as fp:
-                temp_filename = fp.name
-            
-            # 음성 생성
-            tts = gTTS(text=text, lang='en', slow=False)
-            tts.save(temp_filename)
-            
-            # 오디오 재생
-            pygame.mixer.music.load(temp_filename)
-            pygame.mixer.music.play()
-            
-            # 오디오가 끝날 때까지 대기
-            while pygame.mixer.music.get_busy():
-                pygame.time.Clock().tick(10)
-            
-            # 정리
-            os.unlink(temp_filename)
-            
-            self.logger.info(f"TTS completed: '{text}'")
-            
+            if self.tts_engine:
+                self.tts_engine.say(text)
+                self.tts_engine.runAndWait()
+                self.logger.info(f"TTS completed: '{text}'")
+            else:
+                raise RuntimeError("TTS engine not available")
+
         except Exception as e:
             self.logger.error(f"Error in text-to-speech: {e}")
-            # 에러 발생 시 프린트로 대체
             print(f"AI Response: {text}")
     
     #def log_response(self, user_input, ai_response):
@@ -775,15 +789,17 @@ Just speak naturally! I understand context, so you can say things like:
             self.sensor_monitor.cleanup()
             self.logger.info("Navigation sensor manager cleaned up")
         
-        # 오디오 시스템 정리
-        try:
-            import pygame
-            pygame.mixer.quit()
-            self.logger.info("Audio system cleaned up")
-        except Exception as e:
-            self.logger.debug(f"Audio cleanup error: {e}")
-        
         self.text_to_speech("Goodbye! INTA AI Assistant shutting down.")
+
+        # 오디오 시스템 정리
+        if self.tts_engine:
+            try:
+                self.tts_engine.stop()
+            except Exception as e:
+                self.logger.debug(f"TTS cleanup error: {e}")
+            finally:
+                self.tts_engine = None
+
         self.logger.info("System shutdown complete")
 
 

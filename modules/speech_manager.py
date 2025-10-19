@@ -1,354 +1,267 @@
 """
 Speech Manager Module
-Handles text-to-speech functionality using gTTS for the assistive glasses system
+Provides offline text-to-speech capabilities for the assistive glasses system.
 """
 
 import logging
 import threading
 import queue
 import time
-import os
-import tempfile
 from typing import Optional
-from pathlib import Path
 
 try:
-    from gtts import gTTS
-    import io
-    GTTS_AVAILABLE = True
+    import pyttsx3
+    PYTTSX3_AVAILABLE = True
 except ImportError:
-    GTTS_AVAILABLE = False
-    logging.warning("gTTS not available - using simulation mode")
+    PYTTSX3_AVAILABLE = False
+    logging.warning("pyttsx3 not available - using simulation mode for speech output")
 
-try:
-    import pygame
-    PYGAME_AVAILABLE = True
-except ImportError:
-    PYGAME_AVAILABLE = False
-    logging.warning("pygame not available - audio playback may be limited")
 
 class SpeechManager:
-    """Manages text-to-speech functionality using gTTS for the assistive glasses"""
-    
+    """Manages text-to-speech functionality using an offline TTS engine."""
+
     def __init__(self, volume: float = 0.9, language: str = 'en', slow: bool = False):
         self.logger = logging.getLogger(__name__)
         self.volume = volume
         self.language = language
         self.slow = slow
         self.is_speaking = False
-        self.speech_queue = queue.Queue()
-        self.speech_thread = None
+        self.speech_queue: "queue.Queue[tuple[str, int]]" = queue.Queue()
+        self.speech_thread: Optional[threading.Thread] = None
         self.stop_speaking = False
-        self.temp_dir = Path(tempfile.gettempdir()) / "glasses_tts"
-        
-        # Create temp directory for audio files
-        self.temp_dir.mkdir(exist_ok=True)
-        
-        # Initialize audio mixer
-        self.initialize_audio()
-        
-        # Start speech worker thread
+        self.tts_engine: Optional["pyttsx3.Engine"] = None
+        self.default_rate: Optional[int] = None
+
+        self.initialize_engine()
         self.start_speech_worker()
-    
-    def initialize_audio(self):
-        """Initialize the audio mixer for playback"""
-        if not PYGAME_AVAILABLE:
-            self.logger.warning("Running in simulation mode - audio not available")
+
+    def initialize_engine(self):
+        """Initialize the pyttsx3 engine with desired settings."""
+        if not PYTTSX3_AVAILABLE:
+            self.logger.warning("pyttsx3 engine is unavailable; speech will be simulated")
             return
-        
+
         try:
-            pygame.mixer.pre_init(frequency=22050, size=-16, channels=2, buffer=4096)
-            pygame.mixer.init()
-            pygame.mixer.music.set_volume(self.volume)
-            self.logger.info("Audio mixer initialized successfully")
-            
+            self.tts_engine = pyttsx3.init()
+            self.tts_engine.setProperty('volume', float(self.volume))
+            self.default_rate = self.tts_engine.getProperty('rate')
+
+            if self.language:
+                self._select_language_voice(self.language)
+
+            self._apply_speed_setting(self.slow)
+
+            self.logger.info("Offline TTS engine initialized")
+
         except Exception as e:
-            self.logger.error(f"Failed to initialize audio mixer: {str(e)}")
-    
+            self.logger.error(f"Failed to initialize pyttsx3 engine: {e}")
+            self.tts_engine = None
+
+    def _select_language_voice(self, language_code: str):
+        if not self.tts_engine:
+            return
+
+        try:
+            voices = self.tts_engine.getProperty('voices')
+            for voice in voices:
+                languages = []
+                if hasattr(voice, 'languages'):
+                    languages = [lang.decode('utf-8') if isinstance(lang, bytes) else lang for lang in voice.languages]
+                if any(language_code.lower() in lang.lower() for lang in languages):
+                    self.tts_engine.setProperty('voice', voice.id)
+                    self.logger.info(f"Selected voice '{voice.name}' for language '{language_code}'")
+                    return
+
+            if voices:
+                self.tts_engine.setProperty('voice', voices[0].id)
+                self.logger.warning(
+                    "No voice matched language '%s'; using default voice '%s'",
+                    language_code,
+                    voices[0].name,
+                )
+        except Exception as e:
+            self.logger.warning(f"Failed to set language '{language_code}' for pyttsx3: {e}")
+
+    def _apply_speed_setting(self, slow: bool):
+        if not self.tts_engine:
+            return
+
+        try:
+            base_rate = self.default_rate or self.tts_engine.getProperty('rate')
+            if slow:
+                self.tts_engine.setProperty('rate', max(80, int(base_rate * 0.75)))
+            else:
+                self.tts_engine.setProperty('rate', base_rate)
+        except Exception as e:
+            self.logger.warning(f"Failed to adjust speech rate: {e}")
+
     def start_speech_worker(self):
-        """Start the speech worker thread"""
+        """Start the worker thread that processes queued speech."""
         self.speech_thread = threading.Thread(target=self._speech_worker, daemon=True)
         self.speech_thread.start()
         self.logger.info("Speech worker thread started")
-    
+
     def _speech_worker(self):
-        """Worker thread for processing speech queue"""
+        """Continuously process items from the speech queue."""
         while not self.stop_speaking:
             try:
-                # Get next speech item from queue (with timeout)
                 speech_item = self.speech_queue.get(timeout=1)
-                
-                if speech_item is None:  # Shutdown signal
+
+                if speech_item is None:
                     break
-                
-                text, priority = speech_item
-                
-                # Process the speech
+
+                text, _priority = speech_item
                 self._speak_text(text)
-                
-                # Mark task as done
                 self.speech_queue.task_done()
-                
+
             except queue.Empty:
                 continue
             except Exception as e:
-                self.logger.error(f"Error in speech worker: {str(e)}")
-    
+                self.logger.error(f"Error in speech worker: {e}")
+
     def _speak_text(self, text: str):
-        """Internal method to speak text using gTTS"""
+        """Speak text using the offline TTS engine or simulation fallback."""
         if not text.strip():
             return
-        
+
         self.is_speaking = True
-        
+
         try:
-            if GTTS_AVAILABLE and PYGAME_AVAILABLE:
-                # Generate speech with gTTS
-                tts = gTTS(text=text, lang=self.language, slow=self.slow)
-                
-                # Create temporary file
-                temp_file = self.temp_dir / f"speech_{int(time.time() * 1000)}.mp3"
-                
-                # Save audio to temporary file
-                tts.save(str(temp_file))
-                
-                # Play audio file
-                pygame.mixer.music.load(str(temp_file))
-                pygame.mixer.music.play()
-                
-                # Wait for playback to complete
-                while pygame.mixer.music.get_busy():
-                    time.sleep(0.1)
-                
-                # Clean up temporary file with retry mechanism
-                self._cleanup_temp_file(temp_file)
-                
+            if self.tts_engine:
+                self.tts_engine.say(text)
+                self.tts_engine.runAndWait()
                 self.logger.info(f"Speech completed: {text[:50]}...")
-                
             else:
-                # Simulation mode
                 self.logger.info(f"[SIMULATION] Speaking: {text}")
-                # Simulate speaking time based on text length
-                speaking_time = len(text) * 0.08  # ~80ms per character for gTTS
-                time.sleep(max(1, speaking_time))
-                
+                time.sleep(max(1, len(text) * 0.08))
+
         except Exception as e:
-            self.logger.error(f"Error speaking text: {str(e)}")
-        
+            self.logger.error(f"Error during speech synthesis: {e}")
+
         finally:
             self.is_speaking = False
-    
+
     def speak(self, text: str, priority: int = 0, interrupt: bool = False):
-        """
-        Add text to speech queue
-        
-        Args:
-            text: Text to speak
-            priority: Priority level (0 = normal, 1 = high, 2 = urgent)
-            interrupt: Whether to interrupt current speech
-        """
+        """Queue text for speech output."""
         if not text.strip():
             return
-        
+
         if interrupt:
             self.stop_current_speech()
-        
-        # Add to queue
+
         self.speech_queue.put((text, priority))
-        self.logger.debug(f"Added to speech queue: {text}")
-    
+        self.logger.debug(f"Queued text for speech: {text[:50]}...")
+
     def speak_urgent(self, text: str):
-        """Speak urgent message with high priority and interrupt current speech"""
+        """Speak urgent text immediately."""
         self.speak(text, priority=2, interrupt=True)
-    
+
     def stop_current_speech(self):
-        """Stop current speech and clear queue"""
-        if PYGAME_AVAILABLE:
+        """Stop any ongoing speech and clear the queue."""
+        if self.tts_engine:
             try:
-                pygame.mixer.music.stop()
+                self.tts_engine.stop()
             except Exception as e:
-                self.logger.error(f"Error stopping speech: {str(e)}")
-        
-        # Clear the queue
+                self.logger.error(f"Error stopping speech: {e}")
+
         while not self.speech_queue.empty():
             try:
                 self.speech_queue.get_nowait()
                 self.speech_queue.task_done()
             except queue.Empty:
                 break
-        
+
         self.is_speaking = False
         self.logger.info("Speech stopped and queue cleared")
-    
+
     def wait_for_speech_completion(self, timeout: float = 10.0):
-        """Wait for all queued speech to complete"""
+        """Block until queued speech is finished or timeout occurs."""
         try:
-            # Wait for queue to be empty
             start_time = time.time()
-            while not self.speech_queue.empty() or self.is_speaking:
-                if time.time() - start_time > timeout:
-                    self.logger.warning("Speech completion timeout reached")
-                    break
+            while (not self.speech_queue.empty() or self.is_speaking) and (time.time() - start_time < timeout):
                 time.sleep(0.1)
-            
-            # Wait for queue to be fully processed
+
             self.speech_queue.join()
-            
+
         except Exception as e:
-            self.logger.error(f"Error waiting for speech completion: {str(e)}")
-    
+            self.logger.error(f"Error waiting for speech completion: {e}")
+
     def set_voice_properties(self, volume: Optional[float] = None, language: Optional[str] = None, slow: Optional[bool] = None):
-        """
-        Update voice properties
-        
-        Args:
-            volume: Volume level (0.0 to 1.0)
-            language: Language code (e.g., 'en', 'es', 'fr')
-            slow: Whether to speak slowly
-        """
+        """Update runtime voice properties."""
         if volume is not None:
             self.volume = volume
-            if PYGAME_AVAILABLE:
+            if self.tts_engine:
                 try:
-                    pygame.mixer.music.set_volume(volume)
+                    self.tts_engine.setProperty('volume', float(volume))
                 except Exception as e:
-                    self.logger.error(f"Error setting volume: {str(e)}")
-        
+                    self.logger.error(f"Failed to set volume: {e}")
+
         if language is not None:
             self.language = language
-        
+            self._select_language_voice(language)
+
         if slow is not None:
             self.slow = slow
-        
-        self.logger.info(f"Voice properties updated: volume={self.volume}, language={self.language}, slow={self.slow}")
-    
-    def get_available_languages(self) -> list:
-        """Get list of available languages for gTTS"""
-        if not GTTS_AVAILABLE:
-            return []
-        
-        try:
-            from gtts.lang import tts_langs
-            langs = tts_langs()
-            return [{"code": code, "name": name} for code, name in langs.items()]
-        except Exception as e:
-            self.logger.error(f"Error getting available languages: {str(e)}")
-            return []
-    
-    def test_speech(self, test_text: str = "Hello, this is a test of the speech system."):
-        """Test the speech system with a sample text"""
-        self.logger.info("Testing speech system...")
-        self.speak(test_text)
-    
+            self._apply_speed_setting(slow)
+
+        self.logger.info(
+            "Voice properties updated: volume=%s, language=%s, slow=%s",
+            self.volume,
+            self.language,
+            self.slow,
+        )
+
     def get_speech_status(self) -> dict:
-        """Get current speech status"""
+        """Return current speech system status."""
         return {
             "is_speaking": self.is_speaking,
             "queue_size": self.speech_queue.qsize(),
-            "gtts_available": GTTS_AVAILABLE,
-            "pygame_available": PYGAME_AVAILABLE,
+            "engine_available": self.tts_engine is not None,
             "volume": self.volume,
             "language": self.language,
             "slow_speech": self.slow,
-            "temp_dir": str(self.temp_dir)
         }
-    
-    def _cleanup_temp_file(self, temp_file: Path, max_retries: int = 5):
-        """Clean up temporary file with retry mechanism for Windows compatibility"""
-        for attempt in range(max_retries):
-            try:
-                if temp_file.exists():
-                    temp_file.unlink()
-                    self.logger.debug(f"Successfully deleted temp file: {temp_file.name}")
-                    return
-            except PermissionError as e:
-                if attempt < max_retries - 1:
-                    # Wait a bit longer between retries
-                    wait_time = (attempt + 1) * 0.5
-                    self.logger.debug(f"File {temp_file.name} still in use, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})")
-                    time.sleep(wait_time)
-                else:
-                    self.logger.warning(f"Failed to delete temp file after {max_retries} attempts: {temp_file.name} - {e}")
-            except Exception as e:
-                self.logger.warning(f"Failed to delete temp file: {temp_file.name} - {e}")
-                break
-    
-    def cleanup_temp_files(self):
-        """Clean up temporary audio files with Windows compatibility"""
-        try:
-            if self.temp_dir.exists():
-                files_cleaned = 0
-                files_failed = 0
-                
-                for file in self.temp_dir.glob("*.mp3"):
-                    try:
-                        # Use the improved cleanup method
-                        self._cleanup_temp_file(file, max_retries=3)
-                        files_cleaned += 1
-                    except Exception as e:
-                        files_failed += 1
-                        self.logger.warning(f"Failed to delete temp file {file.name}: {e}")
-                
-                if files_cleaned > 0:
-                    self.logger.info(f"Cleaned up {files_cleaned} temporary files")
-                if files_failed > 0:
-                    self.logger.warning(f"Failed to clean up {files_failed} temporary files")
-                    
-        except Exception as e:
-            self.logger.error(f"Error cleaning up temp files: {str(e)}")
-    
+
     def cleanup(self):
-        """Clean up resources"""
-        self.logger.info("Cleaning up speech manager...")
-        
-        # Stop speech worker
+        """Release resources associated with the speech manager."""
+        self.logger.info("Cleaning up speech manager")
         self.stop_speaking = True
-        self.speech_queue.put(None)  # Signal shutdown
-        
+        self.speech_queue.put(None)
+
         if self.speech_thread and self.speech_thread.is_alive():
             self.speech_thread.join(timeout=2)
-        
-        # Stop any current speech
-        self.stop_current_speech()
-        
-        # Clean up audio mixer
-        if PYGAME_AVAILABLE:
-            try:
-                pygame.mixer.quit()
-            except Exception as e:
-                self.logger.error(f"Error stopping audio mixer: {str(e)}")
-        
-        # Clean up temporary files
-        self.cleanup_temp_files()
-        
-        self.logger.info("Speech manager cleanup complete")
-    
-    def __del__(self):
-        """Destructor to ensure cleanup"""
-        self.cleanup()
 
-# Test function for the speech manager
+        self.stop_current_speech()
+
+        if self.tts_engine:
+            try:
+                self.tts_engine.stop()
+            except Exception:
+                pass
+            self.tts_engine = None
+
+        self.logger.info("Speech manager cleanup complete")
+
+    def __del__(self):
+        try:
+            self.cleanup()
+        except Exception:
+            pass
+
+
 def test_speech_manager():
-    """Test function for speech manager"""
+    """Simple smoke test for the speech manager."""
     logging.basicConfig(level=logging.INFO)
-    
     speech = SpeechManager()
-    
+
     try:
-        print("Testing gTTS speech system...")
-        speech.test_speech()
-        
-        print("Status:", speech.get_speech_status())
-        
-        # Wait for speech to complete
+        print("Testing offline speech system...")
+        speech.speak("This is a test of the offline speech system.")
         speech.wait_for_speech_completion()
-        
-        print("Available languages:", len(speech.get_available_languages()))
-        
-    except KeyboardInterrupt:
-        print("Test interrupted")
+        print("Status:", speech.get_speech_status())
     finally:
         speech.cleanup()
 
+
 if __name__ == "__main__":
-    test_speech_manager() 
+    test_speech_manager()
