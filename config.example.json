@@ -31,6 +31,10 @@
     },
     "hardware": {
         "camera_enabled": true,
+        "camera_type": "esp32_cam",
+        "esp32_cam_url": "http://192.168.4.1:80/stream",
+        "esp32_connection_retries": 5,
+        "esp32_retry_delay": 2.0,
         "sensors_enabled": true,
         "sensor_port": "/dev/ttyACM0",
         "sensor_baudrate": 9600

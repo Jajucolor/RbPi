@@ -152,6 +152,10 @@ class IntaAIAssistant:
             },
             "hardware": {
                 "camera_enabled": True,
+                "camera_type": "esp32_cam",
+                "esp32_cam_url": "http://192.168.4.1:80/stream",
+                "esp32_connection_retries": 5,
+                "esp32_retry_delay": 2.0,
                 "sensors_enabled": True,
                 "sensor_port": "/dev/ttyUSB0",
                 "sensor_baudrate": 9600
@@ -275,7 +279,15 @@ class IntaAIAssistant:
         try:
             # 카메라 매니저 초기화
             if self.config.get("hardware", {}).get("camera_enabled", True):
-                self.camera_manager = CameraManager()
+                hardware_config = self.config.get("hardware", {})
+                self.camera_manager = CameraManager(
+                    camera_type=hardware_config.get("camera_type", "esp32_cam"),
+                    stream_url=hardware_config.get("esp32_cam_url"),
+                    connection_retries=hardware_config.get(
+                        "esp32_connection_retries", 5
+                    ),
+                    retry_delay=hardware_config.get("esp32_retry_delay", 2.0),
+                )
                 self.logger.info("Camera manager initialized")
             else:
                 self.camera_manager = None
