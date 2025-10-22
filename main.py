@@ -6,17 +6,46 @@ import os
 from datetime import datetime
 import sys
 from pathlib import Path
-from gtts import gTTS
 import pygame
 import tempfile
-import os
-import openai
+import wave  # <-- added for Piper WAV writing
+    
+import shutil, subprocess, tempfile, os, pygame
+
+try:
+    import ollama
+    OLLAMA_AVAILABLE = True
+except ImportError:
+    ollama = None
+    OLLAMA_AVAILABLE = False
+
+try:
+    import whisper
+    WHISPER_AVAILABLE = True
+except ImportError:
+    whisper = None
+    WHISPER_AVAILABLE = False
+
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    torch = None
+    TORCH_AVAILABLE = False
+
+# --- REPLACED: Coqui TTS -> Piper ---
+try:
+    from piper.voice import PiperVoice
+    PIPER_TTS_AVAILABLE = True
+except ImportError:
+    PiperVoice = None
+    PIPER_TTS_AVAILABLE = False
+# -------------------------------------
 
 from modules.camera_manager import CameraManager
 from modules.vision_analyzer import VisionAnalyzer
-#from modules.sensor_manager import NavigationSensorManager
+# from modules.sensor_manager import NavigationSensorManager
 
-# 추곽가과제로그형식
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -27,12 +56,17 @@ logging.basicConfig(
 )
 
 class IntaAIAssistant:
-    
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self.running = False
         self.microphone = None
         self.recognizer = None
+        self.whisper_model = None
+        self.whisper_model_name = None
+        self.whisper_device = None
+        self.whisper_fp16 = False
+
+        self.tts_engine = None
         
         # 내비게이션 모니터링 상태
         self.navigation_active = False
@@ -48,6 +82,8 @@ class IntaAIAssistant:
         # 컴포넌트 초기화
         self.setup_microphone()
         self.setup_recognizer()
+        self.setup_whisper_engine()
+        self.setup_tts_engine()
         
         # 보조 안경 모듈 초기화
         self.initialize_assistive_modules()
@@ -64,8 +100,10 @@ class IntaAIAssistant:
 
     
     def setup_audio_system(self):
-        try:    
+        try:
             pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
+            volume = self.config.get("tts", {}).get("volume", 0.9)
+            pygame.mixer.music.set_volume(volume)
             self.logger.info("Audio system initialized successfully")
         except Exception as e:
             self.logger.error(f"Failed to initialize audio system: {e}")
@@ -92,7 +130,10 @@ class IntaAIAssistant:
                 "phrase_threshold": 0.3,
                 "ambient_noise_duration": 2,
                 "timeout": 5,
-                "phrase_time_limit": 5
+                "phrase_time_limit": 5,
+                "whisper_model": "base",
+                "whisper_device": "auto",
+                "language": None
             },
             "ai": {
                 "model": "gpt-4o-mini",
@@ -102,7 +143,8 @@ class IntaAIAssistant:
             },
             "tts": {
                 "rate": 200,
-                "volume": 0.9
+                "volume": 0.9,
+                "model_name": "tts_models/en/vctk/vits"
             },
             "system": {
                 "wake_word": "hey assistant",
@@ -150,7 +192,7 @@ class IntaAIAssistant:
     def setup_recognizer(self):
         # 음성인식 설정
         self.recognizer = sr.Recognizer()
-        
+
         # 설정에서 인식기 세팅 구성
         stt_config = self.config["stt"]
         self.recognizer.energy_threshold = stt_config["energy_threshold"]
@@ -158,9 +200,76 @@ class IntaAIAssistant:
         self.recognizer.pause_threshold = stt_config["pause_threshold"]
         self.recognizer.non_speaking_duration = stt_config["non_speaking_duration"]
         self.recognizer.phrase_threshold = stt_config["phrase_threshold"]
-        
+
         self.logger.info("Speech recognizer configured")
-    
+
+    def setup_whisper_engine(self):
+        """Initialize the offline Whisper speech recognition engine"""
+        if not WHISPER_AVAILABLE:
+            self.logger.warning("Whisper library not available. Offline STT will be disabled.")
+            self.whisper_model = None
+            return
+
+        stt_config = self.config.get("stt", {})
+        model_name = stt_config.get("whisper_model", "base")
+        preferred_device = stt_config.get("whisper_device", "auto")
+        preferred_device_str = preferred_device.lower() if isinstance(preferred_device, str) else preferred_device
+
+        if preferred_device_str == "auto":
+            if TORCH_AVAILABLE and torch.cuda.is_available():
+                device = "cuda"
+            else:
+                device = "cpu"
+        else:
+            device = preferred_device_str if isinstance(preferred_device_str, str) else preferred_device
+
+        fp16 = device.lower().startswith("cuda") if isinstance(device, str) else False
+
+        try:
+            self.logger.info(
+                f"Loading Whisper offline model '{model_name}' on device '{device}'"
+            )
+            self.whisper_model = whisper.load_model(model_name, device=device)
+            self.whisper_model_name = model_name
+            self.whisper_device = device
+            self.whisper_fp16 = fp16
+            self.logger.info("Whisper offline engine initialized successfully")
+        except Exception as e:
+            self.logger.error(f"Failed to load Whisper model '{model_name}': {e}")
+            self.whisper_model = None
+
+    def setup_tts_engine(self):
+        tts_config = self.config.get("tts", {})
+        model_path = tts_config.get("piper_model_path")
+
+        if not PIPER_TTS_AVAILABLE or PiperVoice is None:
+            self.logger.warning("Piper TTS library not available. Offline TTS will fall back to console output.")
+            self.tts_engine = None
+            return
+
+        if not model_path or not os.path.exists(model_path):
+            self.logger.error("Piper model not found. Set 'tts.piper_model_path' in config.json to a valid .onnx file.")
+            self.tts_engine = None
+            return
+
+        try:
+            self.tts_engine = PiperVoice.load(model_path)
+            self.logger.info(f"Piper TTS initialized with model '{model_path}'")
+
+            # Ensure pygame mixer matches the model's sample rate to avoid pitch issues
+            try:
+                sr_hz = int(getattr(self.tts_engine.config, "sample_rate", 22050))
+                pygame.mixer.quit()
+                pygame.mixer.init(frequency=sr_hz, size=-16, channels=2, buffer=512)
+                pygame.mixer.music.set_volume(self.config.get("tts", {}).get("volume", 0.9))
+                self.logger.info(f"Audio mixer reinitialized at {sr_hz} Hz for Piper voice")
+            except Exception as reinit_err:
+                self.logger.warning(f"Could not reinit mixer to Piper sample rate: {reinit_err}")
+
+        except Exception as e:
+            self.logger.error(f"Failed to initialize Piper TTS: {e}")
+            self.tts_engine = None
+
     def initialize_assistive_modules(self):
         # camera,vision, sensor manager 이잉
         try:
@@ -216,6 +325,7 @@ class IntaAIAssistant:
             
             # 음성 인식
             self.logger.info("Listening for speech...")
+            print("[Whisper] Listening...")
             with self.microphone as source:
                 try:
                     audio = self.recognizer.listen(
@@ -237,150 +347,163 @@ class IntaAIAssistant:
 
     
     def speech_to_text(self, audio):
-        # google speech_recognition 을 활용한 stt
-        try:
-            text = self.recognizer.recognize_google(audio)
-            self.logger.info(f"Recognized speech: '{text}'")
-            return text
-            
-        except sr.UnknownValueError:
-            self.logger.warning("Google Speech Recognition could not understand audio")
+        """Transcribe audio using the offline Whisper model"""
+        if not self.whisper_model:
+            self.logger.error("Whisper STT is unavailable - offline model not initialized")
             return None
-        except sr.RequestError as e:
-            self.logger.error(f"Google Speech Recognition service error: {e}")
-            return None
-        except Exception as e:
-            self.logger.error(f"Error in speech recognition: {e}")
-            return None
-    
-    # at top of the file
-    import ollama
 
-    def generate_ai_response(self, user_input):
-        # t2t? 로컬 Ollama에게 텍스트 보내고 답 받기
+        stt_config = self.config.get("stt", {})
+        language = stt_config.get("language")
+        if isinstance(language, str) and language.strip().lower() in {"", "auto"}:
+            language = None
+
+        temp_file_path = None
         try:
-            # (옵션) 원격/커스텀 호스트를 쓰고 싶다면 config에 ollama_host를 넣으세요.
-            # 예: "ollama_host": "http://127.0.0.1:11434"
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio:
+                temp_audio.write(audio.get_wav_data())
+                temp_file_path = temp_audio.name
+
+            transcription = self.whisper_model.transcribe(
+                temp_file_path,
+                fp16=self.whisper_fp16,
+                language=language,
+            )
+
+            if not transcription:
+                self.logger.warning("No transcription returned from Whisper")
+                return None
+
+            text = transcription.get("text", "").strip()
+            if not text:
+                self.logger.info("Whisper transcription was empty")
+                return None
+
+            self.logger.info(f"Whisper recognized speech: '{text}'")
+            print(f"[Whisper] User said: {text}")
+            return text
+
+        except Exception as e:
+            self.logger.error(f"Error in Whisper speech recognition: {e}")
+            return None
+        finally:
+            if temp_file_path and os.path.exists(temp_file_path):
+                try:
+                    os.remove(temp_file_path)
+                except OSError:
+                    pass
+    
+    def generate_ai_response(self, user_input):
+        if not OLLAMA_AVAILABLE:
+            self.logger.error("Ollama client not available")
+            return "AI response is unavailable because the Ollama client is not installed."
+
+        try:
+            # If you configured a remote host, keep using it; otherwise default client
             ollama_host = self.config["ai"].get("ollama_host")
             client = ollama.Client(host=ollama_host) if ollama_host else ollama
 
-            # 프롬프트
-            system_prompt = """You are INTA, an advanced AI assistant for visually impaired users. You have access to a camera, ultrasonic sensors, and infrared sensors to help users navigate and understand their environment. Do not say more than 3 sentences.
+            model_name = self.config["ai"].get("model")
 
-            Analyze the user's request and determine what command they want to execute. Understand contextual language - users may not use exact keywords but express their needs naturally.
+            # Keep responses short and the model warm
+            options = {
+                "temperature": float(self.config["ai"].get("temperature", 0.2)),
+                "num_predict": int(self.config["ai"].get("max_tokens", 96)),
+                "keep_alive": "5m",   # avoid reloads on Pi
+                "num_ctx": 2048,      # enough for brief history if you add it later
+                "num_thread": 0,      # let Ollama auto-select cores
+            }
 
-            Available commands and their contextual variations:
+            stream = client.chat(
+                model=model_name,
+                messages=[{"role": "user", "content": user_input}],
+                options=options,
+                stream=True,  # <<< streaming enabled
+            )
 
-            CAMERA & VISION COMMANDS:
-            - capture_image: "take a picture", "what do you see", "describe what's around me", "show me my surroundings", "what's in front of me"
-            - describe_surroundings: "what's the environment like", "describe the area", "what's around here", "tell me about this place"
-            - read_text: "read that sign", "what does that say", "read the text", "what's written there", "read the label"
-            - identify_objects: "what objects do you see", "what's that thing", "identify what's there", "what items are visible"
+            # Option A: collect full text, return at end (simple)
+            chunks = []
+            for part in stream:
+                msg = part.get("message", {})
+                if "content" in msg:
+                    chunks.append(msg["content"])
+            ai_response = "".join(chunks)
 
-            NAVIGATION & SENSOR COMMANDS:
-            - navigate: "help me walk", "is it safe to move forward", "guide me", "help me navigate", "which way should I go", "start navigation", "begin navigation"
-            - stop_navigation: "stop navigation", "end navigation", "stop guiding me", "stop monitoring", "stop walking assistance"
-            - navigation_status: "navigation status", "is navigation active", "am I being guided", "navigation status check"
-            - distance: "how far is that", "measure the distance", "how close is that object", "what's the distance"
-            - obstacles: "are there any obstacles", "what's blocking my path", "is the way clear", "any hazards ahead", "check for obstacles"
-
-            UTILITY COMMANDS:
-            - time: "what time is it", "tell me the time", "current time"
-            - date: "what's today's date", "what day is it", "current date"
-            - weather: "what's the weather like", "weather forecast", "is it raining"
-            - joke: "tell me a joke", "make me laugh", "say something funny"
-            - status: "system status", "how are you working", "are you functioning properly"
-            - help: "help", "what can you do", "show me your capabilities"
-
-            RESPONSE FORMAT:
-            If the user's request matches one of these commands, respond with:
-            COMMAND: [command_name]
-            DESCRIPTION: [brief description of what you understood]
-
-            If it doesn't match any command, respond with:
-            [natural response]
-
-            Be intelligent and contextual. Users may say things like:
-            - "I can't see what's ahead" → COMMAND: obstacles
-            - "What's in this room?" → COMMAND: describe_surroundings  
-            - "I need to read something" → COMMAND: read_text
-            - "Is it safe to walk?" → COMMAND: navigate
-            - "What's that object?" → COMMAND: identify_objects"""
-
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_input},
-            ]
-
-            # Ollama 옵션 매핑: temperature, num_predict(=max_tokens)
-            options = {}
-            if "temperature" in self.config["ai"]:
-                options["temperature"] = float(self.config["ai"]["temperature"])
-            if "max_tokens" in self.config["ai"]:
-                options["num_predict"] = int(self.config["ai"]["max_tokens"])
-
-            # 모델 이름 예: "llama3:8b", "qwen2.5:7b", "gemma2:9b"
-            model_name = self.config["ai"].get("model", "llama3.2:11b")
-
-            resp = client.chat(model=model_name, messages=messages, options=options)
-            ai_response = resp["message"]["content"]
-
-            # 상호작용 로그
+            # (Optional) log/save
             if self.config["system"].get("log_responses"):
                 self.log_response(user_input, ai_response)
 
             return ai_response
 
         except Exception as e:
-            self.logger.error(f"Error generating AI response (Ollama): {e}")
+            self.logger.error(f"Ollama chat error: {e}")
             return "I'm sorry, I couldn't process that request due to an error."
+
         
     def test():
 
         print(12311111111111111)
-    
+
+
     def text_to_speech(self, text):
-        #gtts 를 이용한 tts 모델
+        if not text:
+            return
+
+        model = self.config["tts"].get("piper_model_path")
+        piper_bin = shutil.which("piper")  # finds the CLI on PATH
+
+        if not piper_bin or not (model and os.path.isfile(model)):
+            self.logger.warning("Piper CLI or model missing; printing instead")
+            print(f"AI Response: {text}")
+            return
+
         try:
-            # 오디오를 위한 임시 파일 생성(이후에 gtts로 덮어쓴다)
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as fp:
-                temp_filename = fp.name
-            
-            # 음성 생성
-            tts = gTTS(text=text, lang='en', slow=False)
-            tts.save(temp_filename)
-            
-            # 오디오 재생
-            pygame.mixer.music.load(temp_filename)
+            # make a temp wav
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as fp:
+                out_wav = fp.name
+
+            # run Piper CLI (this writes a proper WAV header + audio frames)
+            cmd = [piper_bin, "--model", model, "--output_file", out_wav]
+            proc = subprocess.run(
+                cmd,
+                input=text.encode("utf-8"),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+            if proc.returncode != 0 or not os.path.exists(out_wav):
+                self.logger.error(f"Piper CLI failed: {proc.stderr.decode(errors='ignore')}")
+                print(f"AI Response: {text}")
+                return
+
+            # play via pygame
+            pygame.mixer.music.load(out_wav)
             pygame.mixer.music.play()
-            
-            # 오디오가 끝날 때까지 대기
             while pygame.mixer.music.get_busy():
                 pygame.time.Clock().tick(10)
-            
-            # 정리
-            os.unlink(temp_filename)
-            
-            self.logger.info(f"TTS completed: '{text}'")
-            
+
+            os.unlink(out_wav)
+            self.logger.info("Piper TTS (CLI) completed")
+
         except Exception as e:
-            self.logger.error(f"Error in text-to-speech: {e}")
-            # 에러 발생 시 프린트로 대체
+            self.logger.error(f"Piper CLI error: {e}")
             print(f"AI Response: {text}")
+
+
+
     
-    #def log_response(self, user_input, ai_response):
-    #    """대화 로그 남기기"""
-    #    try:
-    #        log_file = Path("conversation_log.txt")
-    #        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    #        
-    #        with open(log_file, "a", encoding="utf-8") as f:
-    #            f.write(f"[{timestamp}] User: {user_input}\n")
-    #            f.write(f"[{timestamp}] AI: {ai_response}\n")
-    #            f.write("-" * 50 + "\n")
-    #            
-    #    except Exception as e:
-    #        self.logger.error(f"Error logging conversation: {e}")
+    def log_response(self, user_input, ai_response):
+       """대화 로그 남기기"""
+       try:
+           log_file = Path("conversation_log.txt")
+           timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+           
+           with open(log_file, "a", encoding="utf-8") as f:
+               f.write(f"[{timestamp}] User: {user_input}\n")
+               f.write(f"[{timestamp}] AI: {ai_response}\n")
+               f.write("-" * 50 + "\n")
+               
+       except Exception as e:
+           self.logger.error(f"Error logging conversation: {e}")
     
     def process_conversation(self):
         # 파이프라인
@@ -396,13 +519,14 @@ class IntaAIAssistant:
             return False
         
         # wake word 확인(assistant)
-        wake_word = self.config["system"]["wake_word"].lower()
-        if wake_word and wake_word not in user_input.lower():
-            self.logger.info("Wake word not detected, ignoring input")
-            return False
+        # wake_word = self.config["system"]["wake_word"].lower()
+        # if wake_word and wake_word not in user_input.lower():
+        #     self.logger.info("Wake word not detected, ignoring input")
+        #     return False
         
         # AI 응답 생성
         ai_response = self.generate_ai_response(user_input)
+        print(ai_response + "11111132232")
         
         # 명령어 처리
         processed_response = self.process_ai_response(ai_response)

@@ -7,22 +7,27 @@
         "phrase_threshold": 0.3,
         "ambient_noise_duration": 2,
         "timeout": 5,
-        "phrase_time_limit": 5
+        "phrase_time_limit": 5,
+        "whisper_model": "tiny",
+        "whisper_device": "auto",
+        "language": null
     },
     "ai": {
         "provider": "ollama",
-        "model": "llama3.2:11b",
-        "temperature": 0.4,
-        "max_tokens": 256,
-        "ollama_host": "http://localhost:8000"
-      },      
-    "tts": {
-        "rate": 200,
-        "volume": 0.9
-    },
+        "model": "inta-r1-1_5b",
+        "temperature": 0.2,
+        "max_tokens":64,
+        "ollama_host": "http://localhost:11434",
+        "keep_alive": "2h",
+        "num_ctx": 2048
+      },
+      "tts": {
+          "volume": 0.9,
+          "piper_model_path": "/home/happy/piper_voices/en/en_US/lessac/medium/en_US-lessac-medium.onnx"
+      },
     "system": {
         "wake_word": "hey assistant",
-        "log_responses": true
+        "log_responses": false
     },
     "hardware": {
         "camera_enabled": true,
@@ -30,4 +35,5 @@
         "sensor_port": "/dev/ttyACM0",
         "sensor_baudrate": 9600
     }
-} 
+  }
+  
